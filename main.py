@@ -53,7 +53,7 @@ if __name__ == '__main__':
     
     
     ## Set contextual variables for bentebot to function
-    context.redis_client = redis_client
+    context.redis = redis_client
     context.llama = llama
     context.discord = disc
     context.llama_default_model = llama_default_model
