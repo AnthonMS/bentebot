@@ -1,0 +1,5 @@
+dotenv
+redis
+ollama
+discord.py
+PyNaCl

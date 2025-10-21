@@ -1,0 +1,28 @@
+version: "3.9"
+
+services:
+  bentebot-discord:
+    build: .
+    image: bentebot-discord
+    container_name: bentebot-discord
+    environment:
+      ENV: docker
+      DISCORD_TOKEN: ${DISCORD_TOKEN}
+      OLLAMA_HOST_URL: ${OLLAMA_HOST_URL}
+      OLLAMA_DEFAULT_MODEL: ${OLLAMA_DEFAULT_MODEL}
+      BASIC_AUTH_USERNAME: ${BASIC_AUTH_USERNAME}
+      BASIC_AUTH_PASSWORD: ${BASIC_AUTH_PASSWORD}
+      VERIFY_SSL: ${VERIFY_SSL}
+      REDIS_HOST: ${REDIS_HOST}           # points to the redis service
+      REDIS_PORT: ${REDIS_PORT}
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+
+  redis:
+    image: redis:7-alpine
+    container_name: bentebot-redis
+    ports:
+      - "6379:6379"             # optional: exposes Redis to host
+    restart: unless-stopped

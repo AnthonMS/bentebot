@@ -1,0 +1,33 @@
+# Python caches
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+
+# Environment files
+.env
+*.env
+# keep example.env
+!example.env
+
+# Logs
+*.log
+bot.log
+
+# Docker artifacts
+*.tar
+*.img
+
+
+# VSCode / IDEs (optional)
+.vscode/
+.idea/
+
+# Bytecode / temporary files
+*.swp
+*.swo
+
+# Ignore system files
+.DS_Store
+Thumbs.db
