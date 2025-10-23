@@ -32,5 +32,5 @@ docker run python-bentebot
 
 #### Create Image and containers for bentebot and redis on same docker network
 ```bash
-`docker compose up -d --build`
+docker compose up -d --build
 ```
