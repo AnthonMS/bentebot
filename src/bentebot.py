@@ -66,18 +66,57 @@ class bentebot:
         if context.discord.user == message.author:
             # don't respond to ourselves
             return
+        if message.guild is not None: # If server
+            trusted_server = await self.is_trusted_server(message.guild.id)
+            if not trusted_server:
+                logging.info(f"{message.author.id} tried to summon me '{content}' in untrusted server '{message.guild.id}'...")
+                await message.add_reaction('🚫')
+                return
+            
+            await self.on_channel_message(message)
+        else: # if DM
+            dm_allowed = await self.is_dm_allowed(message.author.id)
+            if not dm_allowed:
+                logging.info(f"{message.author.id} tried to DM me '{content}' without DM permission...")
+                await message.add_reaction('🚫')
+                return
+            
+            await self.on_direct_message(message)
         
-        content = message.content.replace(f'<@{context.discord.user.id}>', '').strip()
-        logging.info('Message intent triggered: %s', content)
         
-        # # optionally process commands manually if needed
-        # await context.discord.process_commands(message)
+    
+    
+    async def on_channel_message(self, message):
+        message_content = message.content.replace(f'<@{context.discord.user.id}>', '').strip()
         message_id = message.id
-        message_content = content
         author = message.author
         channel_id = message.channel.id
         attachments = message.attachments
         
+        await self.save_message_redis(message_id, message_content, author, channel_id, attachments)
+    
+    async def on_direct_message(self, message):
+        message_content = message.content.replace(f'<@{context.discord.user.id}>', '').strip()
+        message_id = message.id
+        author = message.author
+        channel_id = message.channel.id
+        attachments = message.attachments
+        
+        await self.save_message_redis(message_id, message_content, author, channel_id, attachments)
+        
+        
+        
+        
+        
+        
+    
+    ##
+    ##
+    ##
+    ##
+    ##
+    ##
+    ## _____________ +SLASH COMMANDS  _____________ ##
         
         
     async def slash_hello(self, interaction: discord.Interaction):
@@ -103,6 +142,18 @@ class bentebot:
 
         await interaction.response.send_message(f"Message ID {message_id} not found.", ephemeral=True)
 
+
+
+
+    ## _____________ -SLASH COMMANDS  _____________ ##
+    ##
+    ##
+    ##
+    ##
+    ##
+    ##
+    ## _____________ +HELPERS  ____________________ ##
+    
     
     async def save_message_redis(self, message_id, message_content, author, channel_id, attachments = []):
         if not context.redis:
@@ -110,10 +161,56 @@ class bentebot:
         
         messsage_content = datetime.now().strftime('%Y-%m-%d %H:%M:%S') + '\n\n' + message_content + "\n\nSent by: " + str(author.name)
         
-        self.redis.rpush(f"messages:{channel_id}", json.dumps({
+        context.redis.rpush(f"messages:{channel_id}", json.dumps({
             "author": author.id,
             "content": messsage_content,
             "id": message_id,
             "attachments": [attachment.url for attachment in attachments],
         }))
         
+        
+    async def is_admin(self, user_id: int, guild_id: int = None):
+        if context.super_admin_ids is not None:
+            super_admin_ids = [int(id.strip()) for id in context.super_admin_ids.split(",")]
+            if (user_id in super_admin_ids):
+                return True
+        
+        if context.redis and guild_id is not None:
+            if context.redis.sismember(f"admins:{guild_id}", str(user_id)):
+                return True
+        
+        return False
+    
+    async def is_dm_allowed(self, user_id: int):
+        is_admin = await self.is_admin(user_id)
+        if is_admin:
+            return True
+        
+        
+        if context.redis:
+            if context.redis.sismember(f"dm_whitelist", str(user_id)):
+                return True
+        
+        
+        return False
+        
+    async def is_trusted_server(self, server_id: int):
+        if context.discord_server_ids is not None:
+            discord_server_ids = [int(id.strip()) for id in context.discord_server_ids.split(",")]
+            if (server_id in discord_server_ids):
+                return True
+        
+        if context.redis:
+            if context.redis.sismember(f"trusted_servers", str(server_id)):
+                return True
+            
+        return False
+        
+    
+    ## _____________ -HELPERS  ____________________ ##
+    ##
+    ##
+    ##
+    ##
+    ##
+    ##

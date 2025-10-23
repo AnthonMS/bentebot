@@ -57,5 +57,6 @@ if __name__ == '__main__':
     context.llama = llama
     context.discord = disc
     context.llama_default_model = llama_default_model
+    context.super_admin_ids = os.getenv("SUPER_ADMINS")
         
     bentebot().run(os.getenv("DISCORD_TOKEN"))
