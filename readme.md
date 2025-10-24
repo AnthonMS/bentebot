@@ -5,20 +5,18 @@
 A self-hosted Discord chatbot using local LLMs. It protects access through server trust and DM permissions. Future support planned for multimodal AI such as image, music, and video generation.
 
 ## Core Features
-- Locally hosted LLM chatbot through **Ollama**
-- Trusted server validation
-- DM whitelist and admin permission checks
-- redis database to store message history and dynamic whitelist and admin rights.
-- Docker to host discord bot and redis containers
+- Locally hosted LLM chatbot using **Ollama**
+- redis database to store message history, whitelists, admin rights, etc.
+- Docker to host discord bot and redis containers together through seamless docker-compose file
 
 
 ## Future Roadmap
-- Multiple art generation with Hugging Face pipelines
+- Different AI Tasks using Hugging Face pipelines
 
 
 ### Requirements
 ```bash
-pip install discord.py redis python-dotenv
+pip install --no-cache-dir -r requirements.txt
 ````
 
 
