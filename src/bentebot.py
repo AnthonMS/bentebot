@@ -134,13 +134,13 @@ class bentebot:
             await message.add_reaction('💩')
             pass
         finally:
-            await message.remove_reaction('🤔', self.discord.user)
+            await message.remove_reaction('🤔', context.discord.user)
         
     async def writing(self, response):
         full_response = ""
         try:
             thinking = asyncio.create_task(self.thinking(response.message))
-            messages = await self.get_messages(response.message.channel.id)
+            messages = await self.get_messages(response.message)
             
             async for part in self.chat(messages, context.llama_default_model):
                 if thinking is not None and not thinking.done():
@@ -155,9 +155,9 @@ class bentebot:
                     
             await response.write('')
         except asyncio.CancelledError:
-            await message.add_reaction('❌')
+            await response.message.add_reaction('❌')
         except Exception as e:
-            await message.add_reaction('💩')
+            await response.message.add_reaction('💩')
             logging.error("Error answering")
             logging.error(e)
             pass
@@ -170,9 +170,9 @@ class bentebot:
      
     async def chat(self, messages, model=None, milliseconds=1000):
         if model is None:
-            model = self.model
+            model = context.llama_default_model
         sb = io.StringIO() # create new StringIO object that can write and read from a string buffer
-        t = datetime.now()
+        t = datetime.datetime.now()
         try:
             generator = await context.llama.chat(model, messages=messages, stream=True)
             async for part in generator:
@@ -187,10 +187,10 @@ class bentebot:
                     yield part
                     sb.seek(0, io.SEEK_SET)
                     sb.truncate()
-                elif part['done'] or datetime.now() - t > timedelta(milliseconds=milliseconds):
+                elif part['done'] or datetime.datetime.now() - t > datetime.timedelta(milliseconds=milliseconds):
                     part['message']['content'] = sb.getvalue()
                     yield part
-                    t = datetime.now()
+                    t = datetime.datetime.now()
                     sb.seek(0, io.SEEK_SET) # change current position in StringIO buffer (io.SEEK_SET = position is relative to beginning of buffer)
                     sb.truncate() # resizes StringIO buffer to current position. Since current position was just set to 0, this clears the buffer
                 
@@ -198,20 +198,21 @@ class bentebot:
             logging.error("Error getting AI chat response")
             logging.error(e)
         
+        
     async def generate(self, content, model=None):
         if model is None:
-            model = self.model
+            model = context.llama_default_model
         sb = io.StringIO()
-        t = datetime.now()
+        t = datetime.datetime.now()
         try:
-            generator = await self.ollama.generate(model=model, prompt=content, keep_alive=-1, stream=True)
+            generator = await context.ollama.generate(model=model, prompt=content, keep_alive=-1, stream=True)
             async for part in generator:
                 sb.write(part['response'])
 
-                if part['done'] or datetime.now() - t > timedelta(seconds=1):
+                if part['done'] or datetime.datetime.now() - t > datetime.timedelta(seconds=1):
                     part['response'] = sb.getvalue()
                     yield part
-                    t = datetime.now()
+                    t = datetime.datetime.now()
                     sb.seek(0, io.SEEK_SET)
                     sb.truncate()
 
@@ -281,40 +282,28 @@ class bentebot:
         if not context.redis:
             return None
         
-        message_content = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S') + '\n\n' + message_content + "\n\nSent by: " + str(author.name)
+        # message_content = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S') + '\n\n' + message_content + "\n\nSent by: " + str(author.name)
         
-        # context.redis.rpush(f"messages:{channel_id}", json.dumps({
-        #     "author": author.id,
-        #     "content": messsage_content,
-        #     "id": message_id,
-        #     "attachments": [attachment.url for attachment in attachments],
-        # }))
+        payload = {
+            "id": message_id,
+            "author_id": author.id,
+            "role": "assistant" if author.id == context.discord.user.id else "user",
+            "content": message_content,
+            "timestamp": datetime.datetime.utcnow().isoformat(),
+            "attachments": [a.url for a in attachments],
+        }
         context.redis.hset(
-            f"messages:{channel_id}", 
-            message_id,  # field
-            json.dumps({
-                "author": author.id,
-                "content": message_content,
-                "attachments": [a.url for a in attachments],
-            })
+            f"messages:{channel_id}",
+            message_id,
+            json.dumps(payload),
         )
         
-    async def get_message(self, channel_id: int, message_id: int):
+    async def get_messages(self, message):
         if not context.redis:
-            return None
-
-        msg_json = context.redis.hget(f"messages:{channel_id}", message_id)
-        if msg_json:
-            return json.loads(msg_json)
-        
-        return None
-        
-    async def get_messages(self, channel_id: int):
-        if not context.redis:
-            return None
+            return [{"role": "assistant" if message.author.id == context.discord.user.id else "user", "content": message.content}]
 
         # Get all message JSON values from the hash
-        messages_json = context.redis.hvals(f"messages:{channel_id}")
+        messages_json = context.redis.hvals(f"messages:{message.channel.id}")
         
         # Decode bytes if necessary and convert to dict
         messages = []
@@ -324,6 +313,18 @@ class bentebot:
             messages.append(json.loads(msg))
 
         return messages
+            
+            
+    async def get_message(self, channel_id: int, message_id: int):
+        if not context.redis:
+            return None
+
+        msg_json = context.redis.hget(f"messages:{channel_id}", message_id)
+        if msg_json:
+            return json.loads(msg_json)
+        
+        return None
+    
     
     async def get_all_message_ids(self, channel_id: int):
         if not context.redis:
@@ -336,6 +337,7 @@ class bentebot:
         message_ids = [mid.decode() if isinstance(mid, bytes) else str(mid) for mid in message_ids]
 
         return message_ids
+    
         
         
     async def is_admin(self, user_id: int, guild_id: int = None):
