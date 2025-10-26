@@ -36,6 +36,14 @@ class bentebot:
             )
         )
         
+        context.discord.tree.add_command(
+            app_commands.Command(
+                name="model",
+                description="Variety of model commands. Set, Get, List, Pull, Delete",
+                callback=self.slash_model,
+            )
+        )
+        
     def run(self, token):
         try:
             context.discord.run(token)
@@ -122,20 +130,7 @@ class bentebot:
     
     
         
-        
-    async def thinking(self, message, timeout=999):
-        try:
-            await message.add_reaction('🤔')
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            logging.error("Error thinking")
-            logging.error(e)
-            await message.add_reaction('💩')
-            pass
-        finally:
-            await message.remove_reaction('🤔', context.discord.user)
-        
+    ## TODO: Split the Ollama Logic up into another script
     async def writing(self, response):
         full_response = ""
         try:
@@ -167,6 +162,18 @@ class bentebot:
             del self.writing_tasks[response.message.id]  # Remove the task from the dictionary
             # await self.save_message(response.message, full_response)
        
+    async def thinking(self, message, timeout=999):
+        try:
+            await message.add_reaction('🤔')
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logging.error("Error thinking")
+            logging.error(e)
+            await message.add_reaction('💩')
+            pass
+        finally:
+            await message.remove_reaction('🤔', context.discord.user)
      
     async def chat(self, messages, model=None, milliseconds=1000):
         if model is None:
@@ -205,7 +212,7 @@ class bentebot:
         sb = io.StringIO()
         t = datetime.datetime.now()
         try:
-            generator = await context.ollama.generate(model=model, prompt=content, keep_alive=-1, stream=True)
+            generator = await context.llama.generate(model=model, prompt=content, keep_alive=-1, stream=True)
             async for part in generator:
                 sb.write(part['response'])
 
@@ -229,7 +236,71 @@ class bentebot:
     ##
     ##
     ## _____________ +SLASH COMMANDS  _____________ ##
+    
+    ## DONE: Create slash command to see current Ollama Model being used - (Admin only)
+    ## DONE: Create slash command to list available models which are downloaded already - (Admin only)
+    ## DONE: Create slash command to change current model - (Admin only)
+    ## TODO: Create slash command to pull new models - (Admin only)
+    ## TODO: Create slash command to delete models - (Admin only)
+    ## TODO: Create slash command to wipe redis memory so chatbot "forgets" chat history - (Admin only)
+    ## TODO: Create slash command to add/remove user to dm_whitelist - (Admin only)
+    ## TODO: Create slash command to add/remove user from channel admin ( admins:{guild_id} ) - (Admin only)
+    
+    ## TODO: Make it so being an admin/dm_allowed/regular_allowed_user can be set through Discord Roles on servers?
+    
+    
+    async def slash_model(self, interaction: discord.Interaction, action: str = "current", arg2: str = None):
+        is_admin = await self.is_admin(interaction.user.id, interaction.guild.id if interaction.guild else None)
+        if not is_admin:
+            await interaction.response.send_message(
+                "Not authorized.",
+                ephemeral=True
+            )
+            return
         
+        action = action.lower()
+        if action == "current":
+            current_model = await self.get_current_model(interaction.channel_id)
+            await interaction.response.send_message(f"**Current model:** {current_model}")
+            return
+        elif action == "list":
+            model_list = await self.get_model_list()
+            if not model_list:
+                await interaction.response.send_message("**No models available.**")
+                return
+            # Format nicely as numbered list in a code block
+            formatted = "\n".join(f"{i+1}. {name}" for i, name in enumerate(model_list))
+            await interaction.response.send_message(f"**Available Models:**\n```\n{formatted}\n```")
+            return
+        elif action == "set":
+            if not arg2:
+                await interaction.response.send_message(
+                    "**Error:** You must provide a model name to set.",
+                    ephemeral=True
+                )
+                return
+            
+            model_list = await self.get_model_list()
+            if arg2 not in model_list:
+                await interaction.response.send_message(
+                    f"**Error:** Model `{arg2}` not found. Use `/model list` to see available models.",
+                    ephemeral=True
+                )
+                return
+            
+            success = await self.set_current_model(interaction.channel_id, arg2)
+            if success:
+                await interaction.response.send_message(
+                    f"**Model set to:** {arg2}",
+                    ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    "**Error:** Could not save model. Redis may not be available.",
+                    ephemeral=True
+                )
+                
+            return
         
     async def slash_hello(self, interaction: discord.Interaction):
         await interaction.response.send_message(f"Hello {interaction.user.mention}! How's it hanging?")
@@ -376,7 +447,37 @@ class bentebot:
                 return True
             
         return False
+    
+    
+    
+    
+    
+    async def set_current_model(self, channel_id:int, new_model:str):
+        if context.redis:
+            context.redis.set(f"model:{channel_id}", new_model)
+            return True
         
+        return False
+    
+    async def get_current_model(self, channel_id:int):
+        if context.redis:
+            model = context.redis.get(f"model:{channel_id}")  # no await
+            if model:
+                if isinstance(model, bytes):
+                    model = model.decode()
+                return model
+        
+        return context.llama_default_model
+        
+        
+    async def get_model_list(self):
+        model_list = await context.llama.list()
+        logging.info(f"Model List: \n {model_list}")
+        available_models = []
+        for model in model_list['models']:
+            # Use the correct attribute
+            available_models.append(model.model)  
+        return available_models
     
     ## _____________ -HELPERS  ____________________ ##
     ##
