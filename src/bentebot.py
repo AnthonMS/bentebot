@@ -79,8 +79,6 @@ class bentebot:
             if not trusted_server:
                 ## Check if we are mentioned in this message.
                 if context.discord.user not in message.mentions:
-                    logging.info(f"{message.author.id} tried to summon me '{message_content}' in untrusted server '{message.guild.id}'...")
-                    await message.add_reaction('🚫')
                     return
             
             ## TODO: Before saving msg to redis, check that this channel is on the allowed_channels list on redis
