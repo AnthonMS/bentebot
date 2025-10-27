@@ -101,7 +101,7 @@ class bentebot:
         else: # if DM
             dm_allowed = await self.is_dm_allowed(message.author.id)
             if not dm_allowed:
-                logging.info(f"{message.author.id} tried to DM me '{content}' without DM permission...")
+                logging.info(f"{message.author.id} tried to DM me '{message_content}' without DM permission...")
                 await message.add_reaction('🚫')
                 return
             
@@ -119,9 +119,9 @@ class bentebot:
     
     
     async def on_direct_message(self, message):
-        message_content = message.content.replace(f'<@{context.discord.user.id}>', '').strip()
-        if message_content.lower() == "hello":
-            await message.channel.send("hello")
+        # message_content = message.content.replace(f'<@{context.discord.user.id}>', '').strip()
+        # if message_content.lower() == "hello":
+        #     await message.channel.send("hello")
         
         r = Response(message)
         writing = asyncio.create_task(self.writing(r))
@@ -135,7 +135,8 @@ class bentebot:
         full_response = ""
         try:
             thinking = asyncio.create_task(self.thinking(response.message))
-            messages = await self.get_messages(response.message)
+            messages = await self.get_messages(response.message, True)
+            # converted_messages = 
             
             async for part in self.chat(messages, context.llama_default_model):
                 if thinking is not None and not thinking.done():
@@ -160,7 +161,17 @@ class bentebot:
             if thinking is not None and not thinking.done():
                 thinking.cancel()
             del self.writing_tasks[response.message.id]  # Remove the task from the dictionary
-            # await self.save_message(response.message, full_response)
+             # save bot reply
+            bot_msg = response.r
+            if bot_msg:
+                await self.save_message_redis(
+                    message_id=bot_msg.id,
+                    message_content=full_response,
+                    author=bot_msg.author,
+                    channel_id=bot_msg.channel.id,
+                    attachments=[],
+                    # attachments=bot_msg.attachments,
+                )
        
     async def thinking(self, message, timeout=999):
         try:
@@ -369,21 +380,83 @@ class bentebot:
             json.dumps(payload),
         )
         
-    async def get_messages(self, message):
+    async def get_messages(self, message, format: bool = False):
         if not context.redis:
             return [{"role": "assistant" if message.author.id == context.discord.user.id else "user", "content": message.content}]
 
-        # Get all message JSON values from the hash
-        messages_json = context.redis.hvals(f"messages:{message.channel.id}")
-        
-        # Decode bytes if necessary and convert to dict
-        messages = []
-        for msg in messages_json:
+        # Read stored messages
+        raw = []
+        for msg in context.redis.hvals(f"messages:{message.channel.id}"):
             if isinstance(msg, bytes):
                 msg = msg.decode()
-            messages.append(json.loads(msg))
+            raw.append(json.loads(msg))
 
-        return messages
+        if not format:
+            return raw
+        
+        # Sort by timestamp
+        raw.sort(key=lambda m: m.get("timestamp", ""))
+
+        formatted = []
+        for m in raw:
+            ts = m.get("timestamp")
+            if ts:
+                try:
+                    dt = datetime.fromisoformat(ts.replace("Z", ""))
+                    ts_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+                except:
+                    ts_str = ts
+            else:
+                ts_str = ""
+
+            author_id = int(m["author_id"])
+            guild = message.guild
+            author = guild.get_member(author_id) if guild else None
+            author_name = author.display_name if author else f"User:{author_id}"
+
+            formatted.append({
+                "role": m["role"],
+                "content": f"{ts_str} {m['content']}\n\nSent by: {author_name}"
+            })
+
+        return formatted
+    
+    
+    def format_messages_for_chat(self, stored_messages):
+        # Sort by timestamp
+        stored_messages.sort(key=lambda m: m.get("timestamp", ""))
+
+        formatted = []
+        for m in stored_messages:
+            # Convert timestamp
+            ts = m.get("timestamp")
+            if ts:
+                try:
+                    dt = datetime.fromisoformat(ts.replace("Z", ""))
+                    timestamp_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+                except:
+                    timestamp_str = ts
+            else:
+                timestamp_str = ""
+
+            # Resolve author name via Discord
+            author_id = int(m["author_id"])
+            author = channel.guild.get_member(author_id) if channel.guild else None
+            author_name = author.display_name if author else f"User:{author_id}"
+
+            # Build content like your old style
+            content = (
+                f"{timestamp_str} "
+                f"{m['content']}\n\n"
+                f"Sent by: {author_name}"
+            )
+
+            formatted.append({
+                "role": m["role"],
+                "content": content
+            })
+
+        return formatted
             
             
     async def get_message(self, channel_id: int, message_id: int):
@@ -469,7 +542,7 @@ class bentebot:
         
         return context.llama_default_model
         
-        
+    ## TODO: Should this go in redis_conn.py or a llama_conn.py file??
     async def get_model_list(self):
         model_list = await context.llama.list()
         logging.info(f"Model List: \n {model_list}")
