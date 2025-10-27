@@ -8,7 +8,17 @@ from .Response import Response
 # Add the parent directory of `src/` to sys.path
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 import context
-
+from src.redis_conn import (
+    save_message_redis,
+    get_messages,
+    get_message,
+    get_all_message_ids,
+    is_admin,
+    is_dm_allowed,
+    is_trusted_server,
+    set_current_model,
+    get_current_model
+)
 
 
 class bentebot:
@@ -85,13 +95,15 @@ class bentebot:
         attachments = message.attachments
         
         if message.guild is not None: # If server
-            trusted_server = await self.is_trusted_server(message.guild.id)
+            # trusted_server = await self.is_trusted_server(message.guild.id)
+            trusted_server = await is_trusted_server(message.guild.id)
             if not trusted_server:
                 logging.info(f"{message.author.id} tried to summon me '{message_content}' in untrusted server '{message.guild.id}'...")
                 await message.add_reaction('🚫')
                 return
             
-            await self.save_message_redis(message_id, message_content, author, channel_id, attachments)
+            await save_message_redis(message_id, message_content, author, channel_id, attachments)
+            # await self.save_message_redis(message_id, message_content, author, channel_id, attachments)
             
             ## Check if we are mentioned in this message.
             if context.discord.user not in message.mentions:
@@ -99,13 +111,15 @@ class bentebot:
             
             await self.on_channel_message(message)
         else: # if DM
-            dm_allowed = await self.is_dm_allowed(message.author.id)
+            # dm_allowed = await self.is_dm_allowed(message.author.id)
+            dm_allowed = await is_dm_allowed(message.author.id)
             if not dm_allowed:
                 logging.info(f"{message.author.id} tried to DM me '{message_content}' without DM permission...")
                 await message.add_reaction('🚫')
                 return
             
-            await self.save_message_redis(message_id, message_content, author, channel_id, attachments)
+            await save_message_redis(message_id, message_content, author, channel_id, attachments)
+            # await self.save_message_redis(message_id, message_content, author, channel_id, attachments)
             await self.on_direct_message(message)
         
         
@@ -114,7 +128,11 @@ class bentebot:
     
     async def on_channel_message(self, message):
         # await message.add_reaction('🤔')
-        await message.channel.send("You mentioned me?")
+        # await message.channel.send("You mentioned me?")
+        
+        r = Response(message)
+        writing = asyncio.create_task(self.writing(r))
+        self.writing_tasks[message.id] = (r, writing)
     
     
     
@@ -135,7 +153,8 @@ class bentebot:
         full_response = ""
         try:
             thinking = asyncio.create_task(self.thinking(response.message))
-            messages = await self.get_messages(response.message, True)
+            messages = await get_messages(response.message, True)
+            # messages = await self.get_messages(response.message, True)
             # converted_messages = 
             
             async for part in self.chat(messages, context.llama_default_model):
@@ -164,7 +183,8 @@ class bentebot:
              # save bot reply
             bot_msg = response.r
             if bot_msg:
-                await self.save_message_redis(
+                # await self.save_message_redis(
+                await save_message_redis(
                     message_id=bot_msg.id,
                     message_content=full_response,
                     author=bot_msg.author,
@@ -261,8 +281,8 @@ class bentebot:
     
     
     async def slash_model(self, interaction: discord.Interaction, action: str = "current", arg2: str = None):
-        is_admin = await self.is_admin(interaction.user.id, interaction.guild.id if interaction.guild else None)
-        if not is_admin:
+        admin_check = await is_admin(interaction.user.id, interaction.guild.id if interaction.guild else None)
+        if not admin_check:
             await interaction.response.send_message(
                 "Not authorized.",
                 ephemeral=True
@@ -271,7 +291,7 @@ class bentebot:
         
         action = action.lower()
         if action == "current":
-            current_model = await self.get_current_model(interaction.channel_id)
+            current_model = await get_current_model(interaction.channel_id)
             await interaction.response.send_message(f"**Current model:** {current_model}")
             return
         elif action == "list":
@@ -299,7 +319,8 @@ class bentebot:
                 )
                 return
             
-            success = await self.set_current_model(interaction.channel_id, arg2)
+            # success = await self.set_current_model(interaction.channel_id, arg2)
+            success = await set_current_model(interaction.channel_id, arg2)
             if success:
                 await interaction.response.send_message(
                     f"**Model set to:** {arg2}",
@@ -324,20 +345,20 @@ class bentebot:
             await interaction.response.send_message("Redis not connected.", ephemeral=True)
             return
         
-        if not await self.is_admin(interaction.user.id, interaction.guild.id if interaction.guild else None):
+        if not await is_admin(interaction.user.id, interaction.guild.id if interaction.guild else None):
             await interaction.response.send_message("no", ephemeral=True)
             return
         
         channel_id = interaction.channel.id
         if message_id.isdigit():
-            stored_msg = await self.get_message(channel_id, message_id)
+            stored_msg = await get_message(channel_id, message_id)
             if stored_msg is not None:
                 await interaction.response.send_message(f"Message ID {message_id} content: {stored_msg['content']}", ephemeral=True)
             else:
                 await interaction.response.send_message(f"Message ID {message_id} not found.", ephemeral=True)
         else:
             # Then check if its an "?", if so, we want to respond with a comma seperated list of message_ids stored in redis.
-            message_ids = await self.get_all_message_ids(channel_id)
+            message_ids = await get_all_message_ids(channel_id)
             if message_ids:
                 await interaction.response.send_message(
                     ", ".join(message_ids), ephemeral=True
@@ -360,187 +381,6 @@ class bentebot:
     ## _____________ +HELPERS  ____________________ ##
     
     
-    async def save_message_redis(self, message_id, message_content, author, channel_id, attachments = []):
-        if not context.redis:
-            return None
-        
-        # message_content = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S') + '\n\n' + message_content + "\n\nSent by: " + str(author.name)
-        
-        payload = {
-            "id": message_id,
-            "author_id": author.id,
-            "role": "assistant" if author.id == context.discord.user.id else "user",
-            "content": message_content,
-            "timestamp": datetime.datetime.utcnow().isoformat(),
-            "attachments": [a.url for a in attachments],
-        }
-        context.redis.hset(
-            f"messages:{channel_id}",
-            message_id,
-            json.dumps(payload),
-        )
-        
-    async def get_messages(self, message, format: bool = False):
-        if not context.redis:
-            return [{"role": "assistant" if message.author.id == context.discord.user.id else "user", "content": message.content}]
-
-        # Read stored messages
-        raw = []
-        for msg in context.redis.hvals(f"messages:{message.channel.id}"):
-            if isinstance(msg, bytes):
-                msg = msg.decode()
-            raw.append(json.loads(msg))
-
-        if not format:
-            return raw
-        
-        # Sort by timestamp
-        raw.sort(key=lambda m: m.get("timestamp", ""))
-
-        formatted = []
-        for m in raw:
-            ts = m.get("timestamp")
-            if ts:
-                try:
-                    dt = datetime.fromisoformat(ts.replace("Z", ""))
-                    ts_str = dt.strftime("%Y-%m-%d %H:%M:%S")
-                except:
-                    ts_str = ts
-            else:
-                ts_str = ""
-
-            author_id = int(m["author_id"])
-            guild = message.guild
-            author = guild.get_member(author_id) if guild else None
-            author_name = author.display_name if author else f"User:{author_id}"
-
-            formatted.append({
-                "role": m["role"],
-                "content": f"{ts_str} {m['content']}\n\nSent by: {author_name}"
-            })
-
-        return formatted
-    
-    
-    def format_messages_for_chat(self, stored_messages):
-        # Sort by timestamp
-        stored_messages.sort(key=lambda m: m.get("timestamp", ""))
-
-        formatted = []
-        for m in stored_messages:
-            # Convert timestamp
-            ts = m.get("timestamp")
-            if ts:
-                try:
-                    dt = datetime.fromisoformat(ts.replace("Z", ""))
-                    timestamp_str = dt.strftime("%Y-%m-%d %H:%M:%S")
-                except:
-                    timestamp_str = ts
-            else:
-                timestamp_str = ""
-
-            # Resolve author name via Discord
-            author_id = int(m["author_id"])
-            author = channel.guild.get_member(author_id) if channel.guild else None
-            author_name = author.display_name if author else f"User:{author_id}"
-
-            # Build content like your old style
-            content = (
-                f"{timestamp_str} "
-                f"{m['content']}\n\n"
-                f"Sent by: {author_name}"
-            )
-
-            formatted.append({
-                "role": m["role"],
-                "content": content
-            })
-
-        return formatted
-            
-            
-    async def get_message(self, channel_id: int, message_id: int):
-        if not context.redis:
-            return None
-
-        msg_json = context.redis.hget(f"messages:{channel_id}", message_id)
-        if msg_json:
-            return json.loads(msg_json)
-        
-        return None
-    
-    
-    async def get_all_message_ids(self, channel_id: int):
-        if not context.redis:
-            return []
-
-        # Get all fields (message IDs) in the hash
-        message_ids = context.redis.hkeys(f"messages:{channel_id}")
-        
-        # If your Redis client returns bytes, decode to str
-        message_ids = [mid.decode() if isinstance(mid, bytes) else str(mid) for mid in message_ids]
-
-        return message_ids
-    
-        
-        
-    async def is_admin(self, user_id: int, guild_id: int = None):
-        if context.super_admin_ids is not None:
-            super_admin_ids = [int(id.strip()) for id in context.super_admin_ids.split(",")]
-            if (user_id in super_admin_ids):
-                return True
-        
-        if context.redis and guild_id is not None:
-            if context.redis.sismember(f"admins:{guild_id}", str(user_id)):
-                return True
-        
-        return False
-    
-    async def is_dm_allowed(self, user_id: int):
-        is_admin = await self.is_admin(user_id)
-        if is_admin:
-            return True
-        
-        
-        if context.redis:
-            if context.redis.sismember(f"dm_whitelist", str(user_id)):
-                return True
-        
-        
-        return False
-        
-    async def is_trusted_server(self, server_id: int):
-        if context.discord_server_ids is not None:
-            discord_server_ids = [int(id.strip()) for id in context.discord_server_ids.split(",")]
-            if (server_id in discord_server_ids):
-                return True
-        
-        if context.redis:
-            if context.redis.sismember(f"trusted_servers", str(server_id)):
-                return True
-            
-        return False
-    
-    
-    
-    
-    
-    async def set_current_model(self, channel_id:int, new_model:str):
-        if context.redis:
-            context.redis.set(f"model:{channel_id}", new_model)
-            return True
-        
-        return False
-    
-    async def get_current_model(self, channel_id:int):
-        if context.redis:
-            model = context.redis.get(f"model:{channel_id}")  # no await
-            if model:
-                if isinstance(model, bytes):
-                    model = model.decode()
-                return model
-        
-        return context.llama_default_model
         
     ## TODO: Should this go in redis_conn.py or a llama_conn.py file??
     async def get_model_list(self):
