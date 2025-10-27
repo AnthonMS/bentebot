@@ -51,20 +51,26 @@ async def get_messages(message, format: bool = False):
         else:
             ts_str = ""
 
-        author_id = int(m["author_id"])
-        # guild = message.guild
-        # author = guild.get_member(author_id) if guild else None
-        # author_name = author.display_name if author else f"User:{author_id}"
         author_name = m["author_name"]
-        sys.stdout.write(f"Saved message from: {author_name} - {author_id}")
-        sys.stdout.flush()
 
         formatted.append({
             "role": m["role"],
             "content": f"{ts_str} {m['content']}\n\nSent by: {author_name}"
         })
+        ## TODO: Take the attachments in the stored messages: "attachments": [a.url for a in attachments]
+        ##          Check if any of them are images.
+        ##          If they are images, we can include it in the chat using `images` argument
 
-    return formatted
+    system_instruction = {
+        "role": "system",
+        "content": (
+            "Messages include metadata like timestamps and sender names. "
+            "Ignore metadata in your reasoning unless it directly affects the prompt."
+            "Respond normally as plain text. "
+            "Do not include timestamps or author tags in your reply."
+        )
+    }
+    return [system_instruction] + formatted
         
         
 async def get_message(channel_id: int, message_id: int):
@@ -92,11 +98,23 @@ async def get_all_message_ids(channel_id: int):
 
     
     
-async def is_admin(user_id: int, guild_id: int = None):
+## TODO: Make it so being an admin/dm_allowed/regular_allowed_user can be set through Discord Roles on servers?
+async def is_superadmin(user_id: int):
     if context.super_admin_ids is not None:
         super_admin_ids = [int(id.strip()) for id in context.super_admin_ids.split(",")]
         if (user_id in super_admin_ids):
             return True
+    return False
+    
+async def is_admin(user_id: int, guild_id: int = None):
+    superadmin_check = await is_superadmin(user_id)
+    if superadmin_check:
+        return True
+        
+    # if context.super_admin_ids is not None:
+    #     super_admin_ids = [int(id.strip()) for id in context.super_admin_ids.split(",")]
+    #     if (user_id in super_admin_ids):
+    #         return True
     
     if context.redis and guild_id is not None:
         if context.redis.sismember(f"admins:{guild_id}", str(user_id)):

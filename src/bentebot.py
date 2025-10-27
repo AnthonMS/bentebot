@@ -13,6 +13,7 @@ from src.redis_conn import (
     get_messages,
     get_message,
     get_all_message_ids,
+    is_superadmin,
     is_admin,
     is_dm_allowed,
     is_trusted_server,
@@ -20,44 +21,19 @@ from src.redis_conn import (
     get_current_model
 )
 from src.ollama_conn import (
-    ollama_conn
+    ollama_conn,
+    get_model_list
 )
 
 
 class bentebot:
     def __init__(self):
-        ## TODO: Move writing tasks to ollama_conn.py class (Create class first)
-        # self.writing_tasks = {}
         self.ollama_conn = ollama_conn()
         # register event handlers
         context.discord.event(self.on_ready)
         context.discord.event(self.on_message)
         
-            
-        # Register slash commands
-        context.discord.tree.add_command(
-            app_commands.Command(
-                name="hello",
-                description="Say hello to my little bot!",
-                callback=self.slash_hello  # async function taking `interaction`
-            )
-        )
-        
-        context.discord.tree.add_command(
-            app_commands.Command(
-                name="test",
-                description="Get a message by ID",
-                callback=self.slash_test,
-            )
-        )
-        
-        context.discord.tree.add_command(
-            app_commands.Command(
-                name="model",
-                description="Variety of model commands. Set, Get, List, Pull, Delete",
-                callback=self.slash_model,
-            )
-        )
+        self.register_slash_commands()
         
     def run(self, token):
         try:
@@ -84,7 +60,6 @@ class bentebot:
         
         # Sync slash commands to Discord
         await context.discord.tree.sync()
-        logging.info('Slash commands synced!')
 
 
 
@@ -100,15 +75,17 @@ class bentebot:
         attachments = message.attachments
         
         if message.guild is not None: # If server
-            # trusted_server = await self.is_trusted_server(message.guild.id)
             trusted_server = await is_trusted_server(message.guild.id)
             if not trusted_server:
-                logging.info(f"{message.author.id} tried to summon me '{message_content}' in untrusted server '{message.guild.id}'...")
-                await message.add_reaction('🚫')
-                return
+                ## Check if we are mentioned in this message.
+                if context.discord.user not in message.mentions:
+                    logging.info(f"{message.author.id} tried to summon me '{message_content}' in untrusted server '{message.guild.id}'...")
+                    await message.add_reaction('🚫')
+                    return
             
+            ## TODO: Before saving msg to redis, check that this channel is on the allowed_channels list on redis
+            ##          Also TODO: Create the set/remove allowed_channels logic
             await save_message_redis(message_id, message_content, author, channel_id, attachments)
-            # await self.save_message_redis(message_id, message_content, author, channel_id, attachments)
             
             ## Check if we are mentioned in this message.
             if context.discord.user not in message.mentions:
@@ -116,7 +93,6 @@ class bentebot:
             
             await self.on_channel_message(message)
         else: # if DM
-            # dm_allowed = await self.is_dm_allowed(message.author.id)
             dm_allowed = await is_dm_allowed(message.author.id)
             if not dm_allowed:
                 logging.info(f"{message.author.id} tried to DM me '{message_content}' without DM permission...")
@@ -133,35 +109,51 @@ class bentebot:
     
     async def on_channel_message(self, message):
         ## Create and start writing task with ollama chatbot
-        await self.ollama_conn.add_task(message)
+        self.ollama_conn.add_task(message)
     
     
     async def on_direct_message(self, message):
         ## Create and start writing task with ollama chatbot
-        await self.ollama_conn.add_task(message)
+        self.ollama_conn.add_task(message)
         
     
-    ##
-    ##
-    ##
-    ##
-    ##
-    ##
-    ## _____________ +SLASH COMMANDS  _____________ ##
     
-    ## DONE: Create slash command to see current Ollama Model being used - (Admin only)
-    ## DONE: Create slash command to list available models which are downloaded already - (Admin only)
-    ## DONE: Create slash command to change current model - (Admin only)
-    ## TODO: Create slash command to pull new models - (Admin only)
-    ## TODO: Create slash command to delete models - (Admin only)
+    
+    def register_slash_commands(self):
+        context.discord.tree.add_command(
+            app_commands.Command(
+                name="hello",
+                description="Say hello to my little bot!",
+                callback=self.slash_hello  # async function taking `interaction`
+            )
+        )
+        
+        context.discord.tree.add_command(
+            app_commands.Command(
+                name="test",
+                description="Get a message by ID",
+                callback=self.slash_test,
+            )
+        )
+        
+        context.discord.tree.add_command(
+            app_commands.Command(
+                name="model",
+                description="Variety of model commands. Set, Get, List, Pull, Delete",
+                callback=self.slash_model,
+            )
+        )
+        
+    
     ## TODO: Create slash command to wipe redis memory so chatbot "forgets" chat history - (Admin only)
     ## TODO: Create slash command to add/remove user to dm_whitelist - (Admin only)
     ## TODO: Create slash command to add/remove user from channel admin ( admins:{guild_id} ) - (Admin only)
     
-    ## TODO: Make it so being an admin/dm_allowed/regular_allowed_user can be set through Discord Roles on servers?
     
     
-    async def slash_model(self, interaction: discord.Interaction, action: str = "current", arg2: str = None):
+    ## TODO: Create slash command to pull new models - (Superadmin only)
+    ## TODO: Create slash command to delete models - (Superadmin only)
+    async def slash_model(self, interaction: discord.Interaction, action: str = "current", model: str = None):
         admin_check = await is_admin(interaction.user.id, interaction.guild.id if interaction.guild else None)
         if not admin_check:
             await interaction.response.send_message(
@@ -171,12 +163,14 @@ class bentebot:
             return
         
         action = action.lower()
+        ## slash command to see current Ollama Model being used - (Admin only)
         if action == "current":
             current_model = await get_current_model(interaction.channel_id)
             await interaction.response.send_message(f"**Current model:** {current_model}")
             return
+        ## slash command to list available models which are downloaded already - (Admin only)
         elif action == "list":
-            model_list = await self.get_model_list()
+            model_list = await get_model_list()
             if not model_list:
                 await interaction.response.send_message("**No models available.**")
                 return
@@ -184,27 +178,28 @@ class bentebot:
             formatted = "\n".join(f"{i+1}. {name}" for i, name in enumerate(model_list))
             await interaction.response.send_message(f"**Available Models:**\n```\n{formatted}\n```")
             return
+        ## slash command to change current model - (Admin only)
         elif action == "set":
-            if not arg2:
+            if not model:
                 await interaction.response.send_message(
                     "**Error:** You must provide a model name to set.",
                     ephemeral=True
                 )
                 return
             
-            model_list = await self.get_model_list()
-            if arg2 not in model_list:
+            model_list = await get_model_list()
+            if model not in model_list:
                 await interaction.response.send_message(
-                    f"**Error:** Model `{arg2}` not found. Use `/model list` to see available models.",
+                    f"**Error:** Model `{model}` not found. Use `/model list` to see available models.",
                     ephemeral=True
                 )
                 return
             
-            # success = await self.set_current_model(interaction.channel_id, arg2)
-            success = await set_current_model(interaction.channel_id, arg2)
+            # success = await self.set_current_model(interaction.channel_id, model)
+            success = await set_current_model(interaction.channel_id, model)
             if success:
                 await interaction.response.send_message(
-                    f"**Model set to:** {arg2}",
+                    f"**Model set to:** {armodelg2}",
                     ephemeral=True
                 )
             else:
@@ -250,35 +245,3 @@ class bentebot:
                 await interaction.response.send_message(
                     "No messages stored in this channel.", ephemeral=True
                 )
-
-
-
-
-    ## _____________ -SLASH COMMANDS  _____________ ##
-    ##
-    ##
-    ##
-    ##
-    ##
-    ##
-    ## _____________ +HELPERS  ____________________ ##
-    
-    
-        
-    ## TODO: Should this go in redis_conn.py or a llama_conn.py file??
-    async def get_model_list(self):
-        model_list = await context.llama.list()
-        logging.info(f"Model List: \n {model_list}")
-        available_models = []
-        for model in model_list['models']:
-            # Use the correct attribute
-            available_models.append(model.model)  
-        return available_models
-    
-    ## _____________ -HELPERS  ____________________ ##
-    ##
-    ##
-    ##
-    ##
-    ##
-    ##

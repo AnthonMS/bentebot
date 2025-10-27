@@ -13,14 +13,29 @@ class ollama_conn:
     def __init__(self):
         self.writing_tasks = {}
         
-    async def add_task(self, message):
+    def add_task(self, message):
         r = Response(message)
         writing_task = asyncio.create_task(self.writing(r))
         self.writing_tasks[message.id] = (r, writing_task)
     
-    async def remove_task(self, message_id):
-        del self.writing_tasks[message_id] 
+    def remove_task(self, message_id):
+        del self.writing_tasks[message_id] # Remove the task from the dictionary
 
+    
+    async def think(self, message, timeout=999):
+        try:
+            await message.add_reaction('🤔')
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logging.error("Error thinking")
+            logging.error(e)
+            await message.add_reaction('💩')
+            pass
+        finally:
+            await message.remove_reaction('🤔', context.discord.user)
+            
+            
     async def writing(self, response):
         full_response = ""
         try:
@@ -49,9 +64,8 @@ class ollama_conn:
         finally:
             if thinking is not None and not thinking.done():
                 thinking.cancel()
-            ## TODO: Fix this!
-            del self.writing_tasks[response.message.id]  # Remove the task from the dictionary
-                # save bot reply
+            self.remove_task(response.message.id)
+            # save bot reply
             bot_msg = response.r
             if bot_msg:
                 await save_message_redis(
@@ -62,19 +76,6 @@ class ollama_conn:
                     attachments=[],
                     # attachments=bot_msg.attachments,
                 )
-    
-    async def think(self, message, timeout=999):
-        try:
-            await message.add_reaction('🤔')
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            logging.error("Error thinking")
-            logging.error(e)
-            await message.add_reaction('💩')
-            pass
-        finally:
-            await message.remove_reaction('🤔', context.discord.user)
     
     async def chat(self, messages, model=None, milliseconds=1000):
         if model is None:
@@ -126,3 +127,12 @@ class ollama_conn:
         except Exception as e:
             logging.error("Error getting AI generate response")
             logging.error(e)
+            
+
+async def get_model_list():
+    model_list = await context.llama.list()
+    available_models = []
+    for model in model_list['models']:
+        # Use the correct attribute
+        available_models.append(model.model)  
+    return available_models
