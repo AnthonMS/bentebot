@@ -1,4 +1,4 @@
-import json, datetime
+import json, datetime, sys
 import context
 
 async def save_message_redis(message_id, message_content, author, channel_id, attachments = []):
@@ -10,6 +10,7 @@ async def save_message_redis(message_id, message_content, author, channel_id, at
     payload = {
         "id": message_id,
         "author_id": author.id,
+        "author_name": author.name,
         "role": "assistant" if author.id == context.discord.user.id else "user",
         "content": message_content,
         "timestamp": datetime.datetime.utcnow().isoformat(),
@@ -51,9 +52,12 @@ async def get_messages(message, format: bool = False):
             ts_str = ""
 
         author_id = int(m["author_id"])
-        guild = message.guild
-        author = guild.get_member(author_id) if guild else None
-        author_name = author.display_name if author else f"User:{author_id}"
+        # guild = message.guild
+        # author = guild.get_member(author_id) if guild else None
+        # author_name = author.display_name if author else f"User:{author_id}"
+        author_name = m["author_name"]
+        sys.stdout.write(f"Saved message from: {author_name} - {author_id}")
+        sys.stdout.flush()
 
         formatted.append({
             "role": m["role"],

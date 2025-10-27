@@ -20,16 +20,15 @@ from src.redis_conn import (
     get_current_model
 )
 from src.ollama_conn import (
-    writing,
-    think,
-    chat,
-    generate
+    ollama_conn
 )
 
 
 class bentebot:
     def __init__(self):
-        self.writing_tasks = {}
+        ## TODO: Move writing tasks to ollama_conn.py class (Create class first)
+        # self.writing_tasks = {}
+        self.ollama_conn = ollama_conn()
         # register event handlers
         context.discord.event(self.on_ready)
         context.discord.event(self.on_message)
@@ -133,23 +132,13 @@ class bentebot:
     
     
     async def on_channel_message(self, message):
-        # await message.add_reaction('🤔')
-        # await message.channel.send("You mentioned me?")
-        
-        r = Response(message)
-        writing_task = asyncio.create_task(writing(r))
-        self.writing_tasks[message.id] = (r, writing_task)
-    
+        ## Create and start writing task with ollama chatbot
+        await self.ollama_conn.add_task(message)
     
     
     async def on_direct_message(self, message):
-        # message_content = message.content.replace(f'<@{context.discord.user.id}>', '').strip()
-        # if message_content.lower() == "hello":
-        #     await message.channel.send("hello")
-        
-        r = Response(message)
-        writing_task = asyncio.create_task(writing(r))
-        self.writing_tasks[message.id] = (r, writing_task)
+        ## Create and start writing task with ollama chatbot
+        await self.ollama_conn.add_task(message)
         
     
     ##
@@ -225,7 +214,9 @@ class bentebot:
                 )
                 
             return
-        
+ 
+ 
+ 
     async def slash_hello(self, interaction: discord.Interaction):
         await interaction.response.send_message(f"Hello {interaction.user.mention}! How's it hanging?")
         
