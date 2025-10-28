@@ -104,23 +104,45 @@ async def is_superadmin(user_id: int):
         super_admin_ids = [int(id.strip()) for id in context.super_admin_ids.split(",")]
         if (user_id in super_admin_ids):
             return True
+        
+    if context.redis:
+        if context.redis.sismember(f"super_admins", str(user_id)):
+            
+            return True
     return False
+
+async def add_super_admin(user_id: int):
+    if context.redis:
+        await context.redis.sadd("super_admins", str(user_id))
+
+async def remove_super_admin(user_id: int):
+    if context.redis:
+        await context.redis.srem("super_admins", str(user_id))
+
+
+    
     
 async def is_admin(user_id: int, guild_id: int = None):
     superadmin_check = await is_superadmin(user_id)
     if superadmin_check:
         return True
-        
-    # if context.super_admin_ids is not None:
-    #     super_admin_ids = [int(id.strip()) for id in context.super_admin_ids.split(",")]
-    #     if (user_id in super_admin_ids):
-    #         return True
     
     if context.redis and guild_id is not None:
         if context.redis.sismember(f"admins:{guild_id}", str(user_id)):
             return True
     
     return False
+
+async def add_guild_admin(user_id: int, guild_id: int):
+    if context.redis:
+        await context.redis.sadd(f"admins:{guild_id}", str(user_id))
+
+async def remove_guild_admin(user_id: int, guild_id: int):
+    if context.redis:
+        await context.redis.srem(f"admins:{guild_id}", str(user_id))
+
+
+
 
 async def is_dm_allowed(user_id: int):
     admin_check = await is_admin(user_id)
@@ -132,8 +154,18 @@ async def is_dm_allowed(user_id: int):
         if context.redis.sismember(f"dm_whitelist", str(user_id)):
             return True
     
-    
     return False
+
+async def add_dm_whitelist(user_id: int):
+    if context.redis:
+        await context.redis.sadd("dm_whitelist", str(user_id))
+
+async def remove_dm_whitelist(user_id: int):
+    if context.redis:
+        await context.redis.srem("dm_whitelist", str(user_id))
+    
+    
+    
     
 async def is_trusted_server(server_id: int):
     if context.discord_server_ids is not None:
@@ -147,8 +179,43 @@ async def is_trusted_server(server_id: int):
         
     return False
 
+async def add_trusted_server(server_id: int):
+    if context.redis:
+        await context.redis.sadd("trusted_servers", str(server_id))
+    else:
+        if context.discord_server_ids:
+            ids = set(id.strip() for id in context.discord_server_ids.split(","))
+            ids.add(str(server_id))
+            context.discord_server_ids = ",".join(ids)
+        
+async def remove_trusted_server(server_id: int):
+    if context.redis:
+        await context.redis.srem("trusted_servers", str(server_id))
+    else:
+        if context.discord_server_ids:
+            ids = set(id.strip() for id in context.discord_server_ids.split(","))
+            ids.discard(str(server_id))
+            context.discord_server_ids = ",".join(ids)
 
 
+
+
+async def is_followed_channel(channel_id: int):
+    if context.redis:
+        if context.redis.sismember(f"followed_channel", str(channel_id)):
+            return True
+        
+    return False
+
+async def add_followed_channel(channel_id: int):
+    if context.redis:
+        await context.redis.sadd("followed_channel", str(channel_id))
+
+
+async def remove_followed_channel(channel_id: int):
+    if context.redis:
+        await context.redis.srem("followed_channel", str(channel_id))
+        
 
 
 async def set_current_model(channel_id:int, new_model:str):

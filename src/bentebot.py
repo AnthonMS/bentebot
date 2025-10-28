@@ -82,7 +82,7 @@ class bentebot:
                     return
             
             ## TODO: Before saving msg to redis, check that this channel is on the allowed_channels list on redis
-            ##          Also TODO: Create the set/remove allowed_channels logic
+            ##          Also TODO: Create add/remove followed_channel slash command
             await save_message_redis(message_id, message_content, author, channel_id, attachments)
             
             ## Check if we are mentioned in this message.
@@ -147,6 +147,9 @@ class bentebot:
     ## TODO: Create slash command to add/remove user to dm_whitelist - (Admin only)
     ## TODO: Create slash command to add/remove user from channel admin ( admins:{guild_id} ) - (Admin only)
     
+    ## TODO: Create slash command to add/remove a server from trusted servers (Superadmins only)
+    async def slash_trusted_servers(self, interaction: discord.Interaction):
+        pass
     
     
     ## TODO: Create slash command to pull new models - (Superadmin only)
