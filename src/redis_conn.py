@@ -114,10 +114,14 @@ async def is_superadmin(user_id: int):
 async def add_super_admin(user_id: int):
     if context.redis:
         await context.redis.sadd("super_admins", str(user_id))
+        return True
+    return False
 
 async def remove_super_admin(user_id: int):
     if context.redis:
         await context.redis.srem("super_admins", str(user_id))
+        return True
+    return False
 
 
     
@@ -136,10 +140,14 @@ async def is_admin(user_id: int, guild_id: int = None):
 async def add_guild_admin(user_id: int, guild_id: int):
     if context.redis:
         await context.redis.sadd(f"admins:{guild_id}", str(user_id))
+        return True
+    return False
 
 async def remove_guild_admin(user_id: int, guild_id: int):
     if context.redis:
         await context.redis.srem(f"admins:{guild_id}", str(user_id))
+        return True
+    return False
 
 
 
@@ -159,10 +167,14 @@ async def is_dm_allowed(user_id: int):
 async def add_dm_whitelist(user_id: int):
     if context.redis:
         await context.redis.sadd("dm_whitelist", str(user_id))
+        return True
+    return False
 
 async def remove_dm_whitelist(user_id: int):
     if context.redis:
         await context.redis.srem("dm_whitelist", str(user_id))
+        return True
+    return False
     
     
     
@@ -182,20 +194,25 @@ async def is_trusted_server(server_id: int):
 async def add_trusted_server(server_id: int):
     if context.redis:
         await context.redis.sadd("trusted_servers", str(server_id))
+        return True
     else:
         if context.discord_server_ids:
             ids = set(id.strip() for id in context.discord_server_ids.split(","))
             ids.add(str(server_id))
             context.discord_server_ids = ",".join(ids)
+        return True
+    return False
         
 async def remove_trusted_server(server_id: int):
     if context.redis:
         await context.redis.srem("trusted_servers", str(server_id))
+        return True
     else:
         if context.discord_server_ids:
             ids = set(id.strip() for id in context.discord_server_ids.split(","))
             ids.discard(str(server_id))
             context.discord_server_ids = ",".join(ids)
+    return False
 
 
 
@@ -210,11 +227,15 @@ async def is_followed_channel(channel_id: int):
 async def add_followed_channel(channel_id: int):
     if context.redis:
         await context.redis.sadd("followed_channel", str(channel_id))
+        return True
+    return False
 
 
 async def remove_followed_channel(channel_id: int):
     if context.redis:
         await context.redis.srem("followed_channel", str(channel_id))
+        return True
+    return False
         
 
 

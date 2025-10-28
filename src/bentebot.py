@@ -143,12 +143,27 @@ class bentebot:
         )
         
     
-    ## TODO: Create slash command to wipe redis memory so chatbot "forgets" chat history - (Admin only)
-    ## TODO: Create slash command to add/remove user to dm_whitelist - (Admin only)
-    ## TODO: Create slash command to add/remove user from channel admin ( admins:{guild_id} ) - (Admin only)
+    
+    
     
     ## TODO: Create slash command to add/remove a server from trusted servers (Superadmins only)
-    async def slash_trusted_servers(self, interaction: discord.Interaction):
+    async def slash_trusted_servers(self, interaction: discord.Interaction, action:str):
+        pass
+    
+    ## TODO: Create slash command to add/remove user to dm_whitelist - (Superadmins only)
+    async def slash_dm_whitelist(self, interaction: discord.Interaction, action:str):
+        pass
+    
+    ## TODO: Create slash command to add/remove user from server admin ( admins:{guild_id} ) - (Admin only)
+    async def slash_server_admin(self, interaction: discord.Interaction, action:str):
+        pass
+    
+    ## TODO: Create slash command to add/remove user from superadmins (Superadmins only)
+    async def slash_superadmin(self, interaction: discord.Interaction, action:str):
+        pass
+    
+    ## TODO: Create slash command to wipe redis memory so chatbot "forgets" chat history - (Admin only and DM if it's in their own DM)
+    async def slash_wipe_redis(self, interaction: discord.Interaction):
         pass
     
     
@@ -196,11 +211,10 @@ class bentebot:
                 )
                 return
             
-            # success = await self.set_current_model(interaction.channel_id, model)
             success = await set_current_model(interaction.channel_id, model)
             if success:
                 await interaction.response.send_message(
-                    f"**Model set to:** {armodelg2}",
+                    f"**Model set to:** {model}",
                     ephemeral=True
                 )
             else:
