@@ -90,14 +90,15 @@ class bentebot:
                 if context.discord.user not in message.mentions:
                     return
             
-            ## TODO: Before saving msg to redis, check that this channel is on the allowed_channels list on redis
-            ##          Also TODO: Create add/remove followed_channel slash command
+            ## TODO: Before saving msg to redis, check if this channel is on a ignore list
+            ##      TODO 2: Create ignore list logic. Redis getters & setters and implementation
             save_message_redis(message_id, message_content, author, channel_id, attachments)
             
             ## Check if we are mentioned in this message.
             if context.discord.user not in message.mentions:
                 return
             
+            ## TODO: Should only respond to users with a certain role attached to them: "bot commander", or if they are admins.
             await self.on_channel_message(message)
         else: # if DM
             dm_allowed = is_dm_allowed(message.author.id)
@@ -145,8 +146,49 @@ class bentebot:
         context.discord.tree.add_command(
             app_commands.Command(
                 name="model",
-                description="Variety of model commands. Set, Get, List, Pull, Delete",
+                description="Variety of model commands. Set, Get, List, Pull, Delete, Help",
                 callback=self.slash_model,
+            )
+        )
+        
+        
+        context.discord.tree.add_command(
+            app_commands.Command(
+                name="trust_server",
+                description="Add/Remove current server to trusted servers. Use `action:help` for usage.",
+                callback=self.slash_trust_server,
+            )
+        )
+        
+        context.discord.tree.add_command(
+            app_commands.Command(
+                name="dm_whitelist",
+                description="Add/Remove tagged user to DM whitelist. Use `action:help` for usage.",
+                callback=self.slash_dm_whitelist,
+            )
+        )
+        
+        context.discord.tree.add_command(
+            app_commands.Command(
+                name="admin",
+                description="Add/Remove tagged user to server admin. Use `action:help` for usage.",
+                callback=self.slash_server_admin,
+            )
+        )
+        
+        context.discord.tree.add_command(
+            app_commands.Command(
+                name="superadmin",
+                description="Add/Remove tagged user to superadmin. Use `action:help` for usage.",
+                callback=self.slash_superadmin,
+            )
+        )
+        
+        context.discord.tree.add_command(
+            app_commands.Command(
+                name="wipe",
+                description="Wipe memory of current chat.",
+                callback=self.slash_wipe_redis,
             )
         )
         
@@ -323,7 +365,6 @@ class bentebot:
         
         
     
-    ## TODO: Create slash command to wipe redis memory so chatbot "forgets" chat history - (Admin only and DM if it's in their own DM)
     async def slash_wipe_redis(self, interaction: discord.Interaction):
         if interaction.guild is None: # DM
             if is_dm_allowed(interaction.user.id) or is_admin(interaction.user.id):

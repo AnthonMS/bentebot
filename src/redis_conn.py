@@ -107,7 +107,6 @@ def delete_messages(channel_id: int):
 
 
     
-## TODO: Make it so being an admin/dm_allowed/regular_allowed_user can be set through Discord Roles on servers?
 def is_superadmin(user_id: int):
     if context.super_admin_ids is not None:
         super_admin_ids = [int(id.strip()) for id in context.super_admin_ids.split(",")]
