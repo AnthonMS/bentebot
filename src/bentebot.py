@@ -152,7 +152,8 @@ class bentebot:
         
     
     
-    
+    ## TODO: Create action: "help" for all the commands with multiple actions.
+    ##          This should respond with helpful advice on how to use the command.
     
     ## DONE: Create slash command to add/remove a server from trusted servers (Superadmins only)
     async def slash_trust_server(self, interaction: discord.Interaction, action:str):
@@ -164,11 +165,31 @@ class bentebot:
                 ephemeral=True
             )
             return
+        
         action = action.lower()
-        if action == "add":
-            add_trusted_server(interaction.guild.id)
-        if action == "remove":
-            remove_trusted_server(interaction.guild.id)
+        if interaction.guild is None: # DM
+            msg = "Can't trust DM."
+        else: # Server or group
+            if action == "add":
+                result = add_trusted_server(interaction.guild.id)
+                msg = f"✅ Added {interaction.guild.name} to trusted servers." if result else f"Redis is not connected."
+                if result:
+                    logging.info(
+                        f"Trusted server added by {interaction.user.name} ({interaction.user.id}): "
+                        f"{interaction.guild.name} ({interaction.guild.id})"
+                    )
+            elif action == "remove":
+                result = remove_trusted_server(interaction.guild.id)
+                msg = f"🗑️ Removed {interaction.guild.name} from trusted servers." if result else f"Redis is not connected."
+                if result:
+                    logging.info(
+                        f"Trusted server removed by {interaction.user.name} ({interaction.user.id}): "
+                        f"{interaction.guild.name} ({interaction.guild.id})"
+                    )
+            else:
+                msg = f"⚠️ Invalid action. Use `/trust_server action:help` for usage info."
+        
+        await interaction.response.send_message(msg, ephemeral=True)
             
     
     ## TODO: Create slash command to add/remove user to dm_whitelist - (Superadmins only)
@@ -182,15 +203,24 @@ class bentebot:
             )
             return
         action = action.lower()
-        user_id = tagged_user.id
         if action == "add":
-            result = add_dm_whitelist(user_id)
+            result = add_dm_whitelist(tagged_user.id)
             msg = f"✅ Added {tagged_user.mention} to DM whitelist." if result else f"Redis is not connected."
+            if result:
+                logging.info(
+                    f"User added to DM Whitelist by {interaction.user.name} ({interaction.user.id}): "
+                    f"{tagged_user.name} ({tagged_user.id})"
+                )
         elif action == "remove":
-            result = remove_dm_whitelist(user_id)
+            result = remove_dm_whitelist(tagged_user.id)
             msg = f"🗑️ Removed {tagged_user.mention} from DM whitelist." if result else "Redis is not connected."
+            if result:
+                logging.info(
+                    f"User removed from DM Whitelist by {interaction.user.name} ({interaction.user.id}): "
+                    f"{tagged_user.name} ({tagged_user.id})"
+                )
         else:
-            msg = "Invalid action. Use `add` or `remove`."
+            msg = "⚠️ Invalid action. Use `/dm_whitelist action:help` for usage info."
         
         await interaction.response.send_message(msg, ephemeral=True)
         
@@ -208,13 +238,23 @@ class bentebot:
         action = action.lower()
         user_id = tagged_user.id
         if action == "add":
-            result = add_server_admin(user_id)
+            result = add_server_admin(user_id, interaction.guild.id)
             msg = f"✅ Added {tagged_user.mention} to server admin." if result else f"Redis is not connected."
+            if result:
+                logging.info(
+                    f"User added to server admin by {interaction.user.name} ({interaction.user.id}): "
+                    f"{tagged_user.name} ({tagged_user.id}) - ({interaction.guild.name}) ({interaction.guild.id})"
+                )
         elif action == "remove":
             result = remove_server_admin(user_id, interaction.guild.id)
             msg = f"🗑️ Removed {tagged_user.mention} from server admin." if result else "Redis is not connected."
+            if result:
+                logging.info(
+                    f"User removed from server admin by {interaction.user.name} ({interaction.user.id}): "
+                    f"{tagged_user.name} ({tagged_user.id}) - ({interaction.guild.name}) ({interaction.guild.id})"
+                )
         else:
-            msg = "Invalid action. Use `add` or `remove`."
+            msg = "⚠️ Invalid action. Use `/admin action:help` for usage info."
         
         await interaction.response.send_message(msg, ephemeral=True)
         
@@ -234,11 +274,21 @@ class bentebot:
         if action == "add":
             result = add_super_admin(user_id)
             msg = f"✅ Added {tagged_user.mention} to super admin." if result else f"Redis is not connected."
+            if result:
+                logging.info(
+                    f"User added to super admin by {interaction.user.name} ({interaction.user.id}): "
+                    f"{tagged_user.name} ({tagged_user.id})"
+                )
         elif action == "remove":
             result = remove_super_admin(user_id)
             msg = f"🗑️ Removed {tagged_user.mention} from super admin." if result else "Redis is not connected."
+            if result:
+                logging.info(
+                    f"User removed from super admin by {interaction.user.name} ({interaction.user.id}): "
+                    f"{tagged_user.name} ({tagged_user.id})"
+                )
         else:
-            msg = "Invalid action. Use `add` or `remove`."
+            msg = "⚠️ Invalid action. Use `/superadmin action:help` for usage info."
         
         await interaction.response.send_message(msg, ephemeral=True)
         
@@ -246,15 +296,21 @@ class bentebot:
     
     ## TODO: Create slash command to wipe redis memory so chatbot "forgets" chat history - (Admin only and DM if it's in their own DM)
     async def slash_wipe_redis(self, interaction: discord.Interaction):
-        # Check if interaction is in DM or in a channel on a server/guild
-        # If DM, just check if they are dm_allowed
-        # If server/guild, check if they are admins on that guild.
         if interaction.guild is None: # DM
-            if is_dm_allowed(interaction.user.id):
-                delete_messages(interaction.channel_id)
+            if is_dm_allowed(interaction.user.id) or is_admin(interaction.user.id):
+                result = delete_messages(interaction.channel_id)
+                if result:
+                    logging.info(
+                        f"DM history wiped by {interaction.user.name} ({interaction.user.id}): "
+                    )
         else: # Server or group
             if is_admin(interaction.user.id):
-                delete_messages(interaction.channel_id)
+                result = delete_messages(interaction.channel_id)
+                if result:
+                    logging.info(
+                        f"Channel message history wiped by {interaction.user.name} ({interaction.user.id}): "
+                        f"{interaction.guild.name} ({interaction.guild.id}) ({interaction.channel.name}) ({interaction.channel_id})"
+                    )
             
     
     
@@ -316,7 +372,12 @@ class bentebot:
                 
             return
  
- 
+    ## async def slash_logs(self, interaction: discord.Interaction)
+    ### Slash command to see logs. there should be an action: "file" / "read" / "clear"
+    ###     file should make the log file downloadable in discord
+    ###     read should take another argument `amount` which take the amount of lines to read
+    ###     clear should clear the log file
+    ## Obviously superadmin
  
     async def slash_hello(self, interaction: discord.Interaction):
         await interaction.response.send_message(f"Hello {interaction.user.mention}! How's it hanging?")
