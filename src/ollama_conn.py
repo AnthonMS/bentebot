@@ -28,9 +28,8 @@ class ollama_conn:
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            logging.error("Error thinking")
-            logging.error(e)
             await message.add_reaction('💩')
+            logging.error("Error thinking", exc_info=True)
             pass
         finally:
             await message.remove_reaction('🤔', context.discord.user)
@@ -40,12 +39,9 @@ class ollama_conn:
         full_response = ""
         try:
             thinking = asyncio.create_task(self.think(response.message))
-            messages = await get_messages(response.message, True)
+            messages = get_messages(response.message, True)
             
             async for part in self.chat(messages, context.llama_default_model):
-                if thinking is not None and not thinking.done():
-                    thinking.cancel()
-                    
                 sys.stdout.write(part['message']['content'])
                 sys.stdout.flush()
                 
@@ -58,8 +54,7 @@ class ollama_conn:
             await response.message.add_reaction('❌')
         except Exception as e:
             await response.message.add_reaction('💩')
-            logging.error("Error answering")
-            logging.error(e)
+            logging.error("Error answering", exc_info=True)
             pass
         finally:
             if thinking is not None and not thinking.done():
@@ -68,7 +63,7 @@ class ollama_conn:
             # save bot reply
             bot_msg = response.r
             if bot_msg:
-                await save_message_redis(
+                save_message_redis(
                     message_id=bot_msg.id,
                     message_content=full_response,
                     author=bot_msg.author,
@@ -103,8 +98,7 @@ class ollama_conn:
                     sb.truncate() # resizes StringIO buffer to current position. Since current position was just set to 0, this clears the buffer
                 
         except Exception as e:
-            logging.error("Error getting AI chat response")
-            logging.error(e)
+            logging.error("Error getting AI chat response", exc_info=True)
         
         
     async def generate(self, content, model=None):
@@ -125,8 +119,7 @@ class ollama_conn:
                     sb.truncate()
 
         except Exception as e:
-            logging.error("Error getting AI generate response")
-            logging.error(e)
+            logging.error("Error getting AI generate response", exc_info=True)
             
 
 async def get_model_list():

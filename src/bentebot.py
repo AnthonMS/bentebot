@@ -86,9 +86,7 @@ class bentebot:
         if message.guild is not None: # If server
             trusted_server = is_trusted_server(message.guild.id)
             if not trusted_server:
-                ## Check if we are mentioned in this message.
-                if context.discord.user not in message.mentions:
-                    return
+                return
             
             ## TODO: Before saving msg to redis, check if this channel is on a ignore list
             ##      TODO 2: Create ignore list logic. Redis getters & setters and implementation
@@ -122,7 +120,6 @@ class bentebot:
     async def on_direct_message(self, message):
         ## Create and start writing task with ollama chatbot
         self.ollama_conn.add_task(message)
-        
     
     
     
