@@ -1,7 +1,7 @@
 import json, datetime, sys
 import context
 
-async def save_message_redis(message_id, message_content, author, channel_id, attachments = []):
+def save_message_redis(message_id, message_content, author, channel_id, attachments = []):
     if not context.redis:
         return None
     
@@ -22,7 +22,7 @@ async def save_message_redis(message_id, message_content, author, channel_id, at
         json.dumps(payload),
     )
     
-async def get_messages(message, format: bool = False):
+def get_messages(message, format: bool = False):
     if not context.redis:
         return [{"role": "assistant" if message.author.id == context.discord.user.id else "user", "content": message.content}]
 
@@ -73,7 +73,7 @@ async def get_messages(message, format: bool = False):
     return [system_instruction] + formatted
         
         
-async def get_message(channel_id: int, message_id: int):
+def get_message(channel_id: int, message_id: int):
     if not context.redis:
         return None
 
@@ -84,7 +84,7 @@ async def get_message(channel_id: int, message_id: int):
     return None
 
 
-async def get_all_message_ids(channel_id: int):
+def get_all_message_ids(channel_id: int):
     if not context.redis:
         return []
 
@@ -96,10 +96,19 @@ async def get_all_message_ids(channel_id: int):
 
     return message_ids
 
-    
+
+def delete_messages(channel_id: int):
+    if not context.redis:
+        return False
+
+    deleted = context.redis.delete(f"messages:{channel_id}")
+    return bool(deleted)
+
+
+
     
 ## TODO: Make it so being an admin/dm_allowed/regular_allowed_user can be set through Discord Roles on servers?
-async def is_superadmin(user_id: int):
+def is_superadmin(user_id: int):
     if context.super_admin_ids is not None:
         super_admin_ids = [int(id.strip()) for id in context.super_admin_ids.split(",")]
         if (user_id in super_admin_ids):
@@ -107,27 +116,36 @@ async def is_superadmin(user_id: int):
         
     if context.redis:
         if context.redis.sismember(f"super_admins", str(user_id)):
-            
             return True
     return False
 
-async def add_super_admin(user_id: int):
-    if context.redis:
-        await context.redis.sadd("super_admins", str(user_id))
+def add_super_admin(user_id: int):
+    if not context.redis:
+        return False
+    
+    exists = context.redis.sismember("super_admins", str(user_id))
+    if exists:
         return True
-    return False
+    
+    context.redis.sadd("super_admins", str(user_id))
+    return True
 
-async def remove_super_admin(user_id: int):
-    if context.redis:
-        await context.redis.srem("super_admins", str(user_id))
-        return True
-    return False
+def remove_super_admin(user_id: int):
+    if not context.redis:
+        return False
+    
+    exists = context.redis.sismember("super_admins", str(user_id))
+    if not exists:
+        return True  # not present
+    
+    context.redis.srem("super_admins", str(user_id))
+    return True
 
 
     
     
-async def is_admin(user_id: int, guild_id: int = None):
-    superadmin_check = await is_superadmin(user_id)
+def is_admin(user_id: int, guild_id: int = None):
+    superadmin_check = is_superadmin(user_id)
     if superadmin_check:
         return True
     
@@ -137,23 +155,33 @@ async def is_admin(user_id: int, guild_id: int = None):
     
     return False
 
-async def add_guild_admin(user_id: int, guild_id: int):
-    if context.redis:
-        await context.redis.sadd(f"admins:{guild_id}", str(user_id))
+def add_server_admin(user_id: int, guild_id: int):
+    if not context.redis:
+        return False
+    
+    exists = context.redis.sismember(f"admins:{guild_id}", str(user_id))
+    if exists:
         return True
-    return False
+    
+    context.redis.sadd(f"admins:{guild_id}", str(user_id))
+    return True
 
-async def remove_guild_admin(user_id: int, guild_id: int):
-    if context.redis:
-        await context.redis.srem(f"admins:{guild_id}", str(user_id))
-        return True
-    return False
+def remove_server_admin(user_id: int, guild_id: int):
+    if not context.redis:
+        return False
+    
+    exists = context.redis.sismember(f"admins:{guild_id}", str(user_id))
+    if not exists:
+        return True  # not present
+        
+    context.redis.srem(f"admins:{guild_id}", str(user_id))
+    return True
 
 
 
 
-async def is_dm_allowed(user_id: int):
-    admin_check = await is_admin(user_id)
+def is_dm_allowed(user_id: int):
+    admin_check = is_admin(user_id)
     if admin_check:
         return True
     
@@ -164,22 +192,32 @@ async def is_dm_allowed(user_id: int):
     
     return False
 
-async def add_dm_whitelist(user_id: int):
-    if context.redis:
-        await context.redis.sadd("dm_whitelist", str(user_id))
+def add_dm_whitelist(user_id: int):
+    if not context.redis:
+        return False
+    
+    exists = context.redis.sismember("dm_whitelist", str(user_id))
+    if exists:
         return True
-    return False
+    
+    context.redis.sadd("dm_whitelist", str(user_id))
+    return True
 
-async def remove_dm_whitelist(user_id: int):
-    if context.redis:
-        await context.redis.srem("dm_whitelist", str(user_id))
-        return True
-    return False
+def remove_dm_whitelist(user_id: int):
+    if not context.redis:
+        return False
+    
+    exists = context.redis.sismember("dm_whitelist", str(user_id))
+    if not exists:
+        return True  # not present
+    
+    context.redis.srem("dm_whitelist", str(user_id))
+    return True
     
     
     
     
-async def is_trusted_server(server_id: int):
+def is_trusted_server(server_id: int):
     if context.discord_server_ids is not None:
         discord_server_ids = [int(id.strip()) for id in context.discord_server_ids.split(",")]
         if (server_id in discord_server_ids):
@@ -191,62 +229,71 @@ async def is_trusted_server(server_id: int):
         
     return False
 
-async def add_trusted_server(server_id: int):
-    if context.redis:
-        await context.redis.sadd("trusted_servers", str(server_id))
+def add_trusted_server(server_id: int):
+    if not context.redis:
+        return False
+    
+    exists = context.redis.sismember("trusted_servers", str(server_id))
+    if exists:
         return True
-    else:
-        if context.discord_server_ids:
-            ids = set(id.strip() for id in context.discord_server_ids.split(","))
-            ids.add(str(server_id))
-            context.discord_server_ids = ",".join(ids)
-        return True
-    return False
+    
+    context.redis.sadd("trusted_servers", str(server_id))
+    return True
         
-async def remove_trusted_server(server_id: int):
-    if context.redis:
-        await context.redis.srem("trusted_servers", str(server_id))
+def remove_trusted_server(server_id: int):
+    if not context.redis:
+        return False
+
+    exists = context.redis.sismember("trusted_servers", str(server_id))
+    if not exists:
         return True
-    else:
-        if context.discord_server_ids:
-            ids = set(id.strip() for id in context.discord_server_ids.split(","))
-            ids.discard(str(server_id))
-            context.discord_server_ids = ",".join(ids)
-    return False
+
+    context.redis.srem("trusted_servers", str(server_id))
+    return True
 
 
 
 
-async def is_followed_channel(channel_id: int):
-    if context.redis:
-        if context.redis.sismember(f"followed_channel", str(channel_id)):
-            return True
+# def is_followed_channel(channel_id: int):
+#     if context.redis:
+#         if context.redis.sismember(f"followed_channel", str(channel_id)):
+#             return True
         
-    return False
+#     return False
 
-async def add_followed_channel(channel_id: int):
-    if context.redis:
-        await context.redis.sadd("followed_channel", str(channel_id))
-        return True
-    return False
+# def add_followed_channel(channel_id: int):
+#     if not context.redis:
+#         return False
+    
+#     exists = context.redis.sismember("followed_channel", str(channel_id))
+#     if exists:
+#         return False
+    
+#     context.redis.sadd("followed_channel", str(channel_id))
+#     return True
 
 
-async def remove_followed_channel(channel_id: int):
-    if context.redis:
-        await context.redis.srem("followed_channel", str(channel_id))
-        return True
-    return False
+# def remove_followed_channel(channel_id: int):
+#     if not context.redis:
+#         return False
+    
+#     exists = context.redis.sismember("trusted_servers", str(server_id))
+#     if not exists:
+#         return False 
+    
+#     context.redis.srem("followed_channel", str(channel_id))
+#     return True
         
 
 
-async def set_current_model(channel_id:int, new_model:str):
+def set_current_model(channel_id:int, new_model:str):
     if context.redis:
         context.redis.set(f"model:{channel_id}", new_model)
         return True
     
     return False
 
-async def get_current_model(channel_id:int):
+def get_current_model(channel_id:int):
     if context.redis:
         model = context.redis.get(f"model:{channel_id}")  # no await
         if model:

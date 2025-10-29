@@ -13,10 +13,19 @@ from src.redis_conn import (
     get_messages,
     get_message,
     get_all_message_ids,
+    delete_messages,
     is_superadmin,
+    add_super_admin,
+    remove_super_admin,
     is_admin,
+    add_server_admin,
+    remove_server_admin,
     is_dm_allowed,
+    add_dm_whitelist,
+    remove_dm_whitelist,
     is_trusted_server,
+    add_trusted_server,
+    remove_trusted_server,
     set_current_model,
     get_current_model
 )
@@ -75,7 +84,7 @@ class bentebot:
         attachments = message.attachments
         
         if message.guild is not None: # If server
-            trusted_server = await is_trusted_server(message.guild.id)
+            trusted_server = is_trusted_server(message.guild.id)
             if not trusted_server:
                 ## Check if we are mentioned in this message.
                 if context.discord.user not in message.mentions:
@@ -83,7 +92,7 @@ class bentebot:
             
             ## TODO: Before saving msg to redis, check that this channel is on the allowed_channels list on redis
             ##          Also TODO: Create add/remove followed_channel slash command
-            await save_message_redis(message_id, message_content, author, channel_id, attachments)
+            save_message_redis(message_id, message_content, author, channel_id, attachments)
             
             ## Check if we are mentioned in this message.
             if context.discord.user not in message.mentions:
@@ -91,14 +100,13 @@ class bentebot:
             
             await self.on_channel_message(message)
         else: # if DM
-            dm_allowed = await is_dm_allowed(message.author.id)
+            dm_allowed = is_dm_allowed(message.author.id)
             if not dm_allowed:
                 logging.info(f"{message.author.id} tried to DM me '{message_content}' without DM permission...")
                 await message.add_reaction('🚫')
                 return
             
-            await save_message_redis(message_id, message_content, author, channel_id, attachments)
-            # await self.save_message_redis(message_id, message_content, author, channel_id, attachments)
+            save_message_redis(message_id, message_content, author, channel_id, attachments)
             await self.on_direct_message(message)
         
         
@@ -146,31 +154,114 @@ class bentebot:
     
     
     
-    ## TODO: Create slash command to add/remove a server from trusted servers (Superadmins only)
-    async def slash_trusted_servers(self, interaction: discord.Interaction, action:str):
-        pass
+    ## DONE: Create slash command to add/remove a server from trusted servers (Superadmins only)
+    async def slash_trust_server(self, interaction: discord.Interaction, action:str):
+        # Action = "add" / "remove"
+        admin_check = is_superadmin(interaction.user.id)
+        if not admin_check:
+            await interaction.response.send_message(
+                "Not authorized.",
+                ephemeral=True
+            )
+            return
+        action = action.lower()
+        if action == "add":
+            add_trusted_server(interaction.guild.id)
+        if action == "remove":
+            remove_trusted_server(interaction.guild.id)
+            
     
     ## TODO: Create slash command to add/remove user to dm_whitelist - (Superadmins only)
-    async def slash_dm_whitelist(self, interaction: discord.Interaction, action:str):
-        pass
+    async def slash_dm_whitelist(self, interaction: discord.Interaction, action:str, tagged_user:discord.User):
+        # Action = "add" / "remove"
+        admin_check = is_superadmin(interaction.user.id)
+        if not admin_check:
+            await interaction.response.send_message(
+                "Not authorized.",
+                ephemeral=True
+            )
+            return
+        action = action.lower()
+        user_id = tagged_user.id
+        if action == "add":
+            result = add_dm_whitelist(user_id)
+            msg = f"✅ Added {tagged_user.mention} to DM whitelist." if result else f"Redis is not connected."
+        elif action == "remove":
+            result = remove_dm_whitelist(user_id)
+            msg = f"🗑️ Removed {tagged_user.mention} from DM whitelist." if result else "Redis is not connected."
+        else:
+            msg = "Invalid action. Use `add` or `remove`."
+        
+        await interaction.response.send_message(msg, ephemeral=True)
+        
     
     ## TODO: Create slash command to add/remove user from server admin ( admins:{guild_id} ) - (Admin only)
-    async def slash_server_admin(self, interaction: discord.Interaction, action:str):
-        pass
+    async def slash_server_admin(self, interaction: discord.Interaction, action:str, tagged_user:discord.User):
+        # Action = "add" / "remove"
+        admin_check = is_admin(interaction.user.id, interaction.guild.id if interaction.guild else None)
+        if not admin_check:
+            await interaction.response.send_message(
+                "Not authorized.",
+                ephemeral=True
+            )
+            return
+        action = action.lower()
+        user_id = tagged_user.id
+        if action == "add":
+            result = add_server_admin(user_id)
+            msg = f"✅ Added {tagged_user.mention} to server admin." if result else f"Redis is not connected."
+        elif action == "remove":
+            result = remove_server_admin(user_id, interaction.guild.id)
+            msg = f"🗑️ Removed {tagged_user.mention} from server admin." if result else "Redis is not connected."
+        else:
+            msg = "Invalid action. Use `add` or `remove`."
+        
+        await interaction.response.send_message(msg, ephemeral=True)
+        
     
     ## TODO: Create slash command to add/remove user from superadmins (Superadmins only)
-    async def slash_superadmin(self, interaction: discord.Interaction, action:str):
-        pass
+    async def slash_superadmin(self, interaction: discord.Interaction, action:str, tagged_user:discord.User):
+        # Action = "add" / "remove"
+        admin_check = is_superadmin(interaction.user.id)
+        if not admin_check:
+            await interaction.response.send_message(
+                "Not authorized.",
+                ephemeral=True
+            )
+            return
+        action = action.lower()
+        user_id = tagged_user.id
+        if action == "add":
+            result = add_super_admin(user_id)
+            msg = f"✅ Added {tagged_user.mention} to super admin." if result else f"Redis is not connected."
+        elif action == "remove":
+            result = remove_super_admin(user_id)
+            msg = f"🗑️ Removed {tagged_user.mention} from super admin." if result else "Redis is not connected."
+        else:
+            msg = "Invalid action. Use `add` or `remove`."
+        
+        await interaction.response.send_message(msg, ephemeral=True)
+        
+        
     
     ## TODO: Create slash command to wipe redis memory so chatbot "forgets" chat history - (Admin only and DM if it's in their own DM)
     async def slash_wipe_redis(self, interaction: discord.Interaction):
-        pass
+        # Check if interaction is in DM or in a channel on a server/guild
+        # If DM, just check if they are dm_allowed
+        # If server/guild, check if they are admins on that guild.
+        if interaction.guild is None: # DM
+            if is_dm_allowed(interaction.user.id):
+                delete_messages(interaction.channel_id)
+        else: # Server or group
+            if is_admin(interaction.user.id):
+                delete_messages(interaction.channel_id)
+            
     
     
     ## TODO: Create slash command to pull new models - (Superadmin only)
     ## TODO: Create slash command to delete models - (Superadmin only)
     async def slash_model(self, interaction: discord.Interaction, action: str = "current", model: str = None):
-        admin_check = await is_admin(interaction.user.id, interaction.guild.id if interaction.guild else None)
+        admin_check = is_admin(interaction.user.id, interaction.guild.id if interaction.guild else None)
         if not admin_check:
             await interaction.response.send_message(
                 "Not authorized.",
@@ -181,7 +272,7 @@ class bentebot:
         action = action.lower()
         ## slash command to see current Ollama Model being used - (Admin only)
         if action == "current":
-            current_model = await get_current_model(interaction.channel_id)
+            current_model = get_current_model(interaction.channel_id)
             await interaction.response.send_message(f"**Current model:** {current_model}")
             return
         ## slash command to list available models which are downloaded already - (Admin only)
@@ -211,7 +302,7 @@ class bentebot:
                 )
                 return
             
-            success = await set_current_model(interaction.channel_id, model)
+            success = set_current_model(interaction.channel_id, model)
             if success:
                 await interaction.response.send_message(
                     f"**Model set to:** {model}",
@@ -238,20 +329,20 @@ class bentebot:
             await interaction.response.send_message("Redis not connected.", ephemeral=True)
             return
         
-        if not await is_admin(interaction.user.id, interaction.guild.id if interaction.guild else None):
+        if not is_admin(interaction.user.id, interaction.guild.id if interaction.guild else None):
             await interaction.response.send_message("no", ephemeral=True)
             return
         
         channel_id = interaction.channel.id
         if message_id.isdigit():
-            stored_msg = await get_message(channel_id, message_id)
+            stored_msg = get_message(channel_id, message_id)
             if stored_msg is not None:
                 await interaction.response.send_message(f"Message ID {message_id} content: {stored_msg['content']}", ephemeral=True)
             else:
                 await interaction.response.send_message(f"Message ID {message_id} not found.", ephemeral=True)
         else:
             # Then check if its an "?", if so, we want to respond with a comma seperated list of message_ids stored in redis.
-            message_ids = await get_all_message_ids(channel_id)
+            message_ids = get_all_message_ids(channel_id)
             if message_ids:
                 await interaction.response.send_message(
                     ", ".join(message_ids), ephemeral=True
