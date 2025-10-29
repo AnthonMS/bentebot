@@ -152,10 +152,6 @@ class bentebot:
         
     
     
-    ## TODO: Create action: "help" for all the commands with multiple actions.
-    ##          This should respond with helpful advice on how to use the command.
-    
-    ## DONE: Create slash command to add/remove a server from trusted servers (Superadmins only)
     async def slash_trust_server(self, interaction: discord.Interaction, action:str):
         # Action = "add" / "remove"
         admin_check = is_superadmin(interaction.user.id)
@@ -186,13 +182,21 @@ class bentebot:
                         f"Trusted server removed by {interaction.user.name} ({interaction.user.id}): "
                         f"{interaction.guild.name} ({interaction.guild.id})"
                     )
+            elif action == "help":
+                    msg = (
+                        "ℹ️ **Trust Server Command Help**\n"
+                        "Use this command to manage trusted servers.\n\n"
+                        "**Usage:** `/trust_server action:<add|remove|help>`\n"
+                        "- `add` → Adds the current server to the trusted list.\n"
+                        "- `remove` → Removes the current server from the trusted list.\n"
+                        "- `help` → Displays this help message."
+                    )
             else:
                 msg = f"⚠️ Invalid action. Use `/trust_server action:help` for usage info."
         
         await interaction.response.send_message(msg, ephemeral=True)
             
     
-    ## TODO: Create slash command to add/remove user to dm_whitelist - (Superadmins only)
     async def slash_dm_whitelist(self, interaction: discord.Interaction, action:str, tagged_user:discord.User):
         # Action = "add" / "remove"
         admin_check = is_superadmin(interaction.user.id)
@@ -219,13 +223,21 @@ class bentebot:
                     f"User removed from DM Whitelist by {interaction.user.name} ({interaction.user.id}): "
                     f"{tagged_user.name} ({tagged_user.id})"
                 )
+        elif action == "help":
+                msg = (
+                    "ℹ️ **DM Whitelist Command Help**\n"
+                    "Use this command to manage who can DM the bot.\n\n"
+                    "**Usage:** `/dm_whitelist action:<add|remove|help> tagged_user:@user`\n"
+                    "- `add` → Adds the mentioned user to DM whitelist.\n"
+                    "- `remove` → Removes the mentioned user from DM whitelist.\n"
+                    "- `help` → Displays this help message."
+                )
         else:
             msg = "⚠️ Invalid action. Use `/dm_whitelist action:help` for usage info."
         
         await interaction.response.send_message(msg, ephemeral=True)
         
     
-    ## TODO: Create slash command to add/remove user from server admin ( admins:{guild_id} ) - (Admin only)
     async def slash_server_admin(self, interaction: discord.Interaction, action:str, tagged_user:discord.User):
         # Action = "add" / "remove"
         admin_check = is_admin(interaction.user.id, interaction.guild.id if interaction.guild else None)
@@ -253,13 +265,21 @@ class bentebot:
                     f"User removed from server admin by {interaction.user.name} ({interaction.user.id}): "
                     f"{tagged_user.name} ({tagged_user.id}) - ({interaction.guild.name}) ({interaction.guild.id})"
                 )
+        elif action == "help":
+                msg = (
+                    "ℹ️ **Server Admin Command Help**\n"
+                    "Use this command to manage server admin privileges.\n\n"
+                    "**Usage:** `/admin action:<add|remove|help> tagged_user:@user`\n"
+                    "- `add` → Adds the mentioned user as server admin in current server.\n"
+                    "- `remove` → Removes the mentioned user as server admin in current server.\n"
+                    "- `help` → Displays this help message."
+                )
         else:
             msg = "⚠️ Invalid action. Use `/admin action:help` for usage info."
         
         await interaction.response.send_message(msg, ephemeral=True)
         
     
-    ## TODO: Create slash command to add/remove user from superadmins (Superadmins only)
     async def slash_superadmin(self, interaction: discord.Interaction, action:str, tagged_user:discord.User):
         # Action = "add" / "remove"
         admin_check = is_superadmin(interaction.user.id)
@@ -287,6 +307,15 @@ class bentebot:
                     f"User removed from super admin by {interaction.user.name} ({interaction.user.id}): "
                     f"{tagged_user.name} ({tagged_user.id})"
                 )
+        elif action == "help":
+                msg = (
+                    "ℹ️ **Super Admin Command Help**\n"
+                    "Use this command to manage super admin privileges.\n\n"
+                    "**Usage:** `/superadmin action:<add|remove|help> tagged_user:@user`\n"
+                    "- `add` → Adds the mentioned user as super admin.\n"
+                    "- `remove` → Removes the mentioned user as super admin.\n"
+                    "- `help` → Displays this help message."
+                )
         else:
             msg = "⚠️ Invalid action. Use `/superadmin action:help` for usage info."
         
@@ -299,18 +328,26 @@ class bentebot:
         if interaction.guild is None: # DM
             if is_dm_allowed(interaction.user.id) or is_admin(interaction.user.id):
                 result = delete_messages(interaction.channel_id)
+                msg = "Memory Wiped..."
                 if result:
                     logging.info(
                         f"DM history wiped by {interaction.user.name} ({interaction.user.id}): "
                     )
+            else:
+                msg = "Not authorized..."
         else: # Server or group
             if is_admin(interaction.user.id):
                 result = delete_messages(interaction.channel_id)
+                msg = "Memory Wiped..."
                 if result:
                     logging.info(
                         f"Channel message history wiped by {interaction.user.name} ({interaction.user.id}): "
                         f"{interaction.guild.name} ({interaction.guild.id}) ({interaction.channel.name}) ({interaction.channel_id})"
                     )
+            else:
+                msg = "Not authorized..."
+                
+        await interaction.response.send_message(msg, ephemeral=True)
             
     
     
@@ -329,48 +366,43 @@ class bentebot:
         ## slash command to see current Ollama Model being used - (Admin only)
         if action == "current":
             current_model = get_current_model(interaction.channel_id)
-            await interaction.response.send_message(f"**Current model:** {current_model}")
-            return
+            msg = f"**Current model:** {current_model}"
         ## slash command to list available models which are downloaded already - (Admin only)
         elif action == "list":
             model_list = await get_model_list()
             if not model_list:
-                await interaction.response.send_message("**No models available.**")
-                return
-            # Format nicely as numbered list in a code block
-            formatted = "\n".join(f"{i+1}. {name}" for i, name in enumerate(model_list))
-            await interaction.response.send_message(f"**Available Models:**\n```\n{formatted}\n```")
-            return
+                msg = "**No models available.**"
+            else:
+                formatted = "\n".join(f"{i+1}. {name}" for i, name in enumerate(model_list))
+                msg = f"**Available Models:**\n```\n{formatted}\n```"
         ## slash command to change current model - (Admin only)
         elif action == "set":
             if not model:
-                await interaction.response.send_message(
-                    "**Error:** You must provide a model name to set.",
-                    ephemeral=True
-                )
-                return
-            
-            model_list = await get_model_list()
-            if model not in model_list:
-                await interaction.response.send_message(
-                    f"**Error:** Model `{model}` not found. Use `/model list` to see available models.",
-                    ephemeral=True
-                )
-                return
-            
-            success = set_current_model(interaction.channel_id, model)
-            if success:
-                await interaction.response.send_message(
-                    f"**Model set to:** {model}",
-                    ephemeral=True
-                )
+                msg = "**Error:** You must provide a model name to set."
             else:
-                await interaction.response.send_message(
-                    "**Error:** Could not save model. Redis may not be available.",
-                    ephemeral=True
+                model_list = await get_model_list()
+                if model not in model_list:
+                    msg = f"**Error:** Model `{model}` not found. Use `/model list` to see available models."
+                else:
+                    success = set_current_model(interaction.channel_id, model)
+                    if success:
+                        msg = f"✅ **Model set to:** {model}"
+                    else:
+                        msg = "**Error:** Could not save model. Redis may not be available."
+        elif action == "help":
+                msg = (
+                    "ℹ️ **Model Command Help**\n"
+                    "Use this command to manage the Ollama models.\n\n"
+                    "**Usage:** `/model action:<current|list|set|help> model:<model_name>`\n"
+                    "- `current` → Shows the current model in use.\n"
+                    "- `list` → Lists all available models.\n"
+                    "- `set` → Sets the current model. Must provide a model name.\n"
+                    "- `help` → Displays this help message."
                 )
+        else:
+            msg = "⚠️ Invalid action. Use `/model action:help` for usage info."
                 
-            return
+        await interaction.response.send_message(msg, ephemeral=True)
  
     ## async def slash_logs(self, interaction: discord.Interaction)
     ### Slash command to see logs. there should be an action: "file" / "read" / "clear"
