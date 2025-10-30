@@ -13,7 +13,7 @@ import context
 THIS_PATH = os.path.dirname(os.path.realpath(__file__))
 
 load_dotenv('.env')
-logging.basicConfig(filename=f'{THIS_PATH}\\bot.log', level=logging.INFO, format='%(asctime)s %(message)s')
+logging.basicConfig(filename=f'bot.log', level=logging.INFO, format='%(asctime)s %(message)s')
 
 os.environ["OMP_NUM_THREADS"] = "4"
 ENVIRONMENT = str(os.getenv("ENV"))

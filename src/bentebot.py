@@ -124,6 +124,7 @@ class bentebot:
     
     
     def register_slash_commands(self):
+        # /hello
         context.discord.tree.add_command(
             app_commands.Command(
                 name="hello",
@@ -132,6 +133,7 @@ class bentebot:
             )
         )
         
+        # /test
         context.discord.tree.add_command(
             app_commands.Command(
                 name="test",
@@ -140,6 +142,7 @@ class bentebot:
             )
         )
         
+        # /model
         context.discord.tree.add_command(
             app_commands.Command(
                 name="model",
@@ -148,7 +151,7 @@ class bentebot:
             )
         )
         
-        
+        # /trust_server
         context.discord.tree.add_command(
             app_commands.Command(
                 name="trust_server",
@@ -157,6 +160,7 @@ class bentebot:
             )
         )
         
+        # /dm_whitelist
         context.discord.tree.add_command(
             app_commands.Command(
                 name="dm_whitelist",
@@ -165,6 +169,7 @@ class bentebot:
             )
         )
         
+        # /admin
         context.discord.tree.add_command(
             app_commands.Command(
                 name="admin",
@@ -173,6 +178,7 @@ class bentebot:
             )
         )
         
+        # /superadmin
         context.discord.tree.add_command(
             app_commands.Command(
                 name="superadmin",
@@ -181,6 +187,7 @@ class bentebot:
             )
         )
         
+        # /wipe
         context.discord.tree.add_command(
             app_commands.Command(
                 name="wipe",
@@ -448,6 +455,90 @@ class bentebot:
     ###     read should take another argument `amount` which take the amount of lines to read
     ###     clear should clear the log file
     ## Obviously superadmin
+    async def slash_logs(self, interaction: discord.Interaction, action: str):
+        """
+        Slash command handler for log management.
+        - 'read': shows recent lines from bot.log
+        - 'download': sends the file as an attachment
+        """
+        admin_check = is_superadmin(interaction.user.id)
+        if not admin_check:
+            return await interaction.response.send_message(
+                "Not authorized.",
+                ephemeral=True
+            )
+        action = action.lower()
+        log_path = 'bot.log'
+        if not os.path.exists(log_path):
+            return await interaction.followup.send("No log file found.", ephemeral=True)
+        
+        if action == "read":
+            try:
+                # Read last 50 lines for brevity
+                with open(log_path, "r", encoding="utf-8") as f:
+                    lines = f.readlines()[-50:]
+                content = "".join(lines).strip()
+                if not content:
+                    content = "(Log file is empty.)"
+
+                # Discord messages have a 2000 char limit
+                if len(content) > 1900:
+                    content = content[-1900:]
+                    content = "…(truncated)…\n" + content
+
+                return await interaction.followup.send(
+                    f"📜 **Last lines from logs:**\n```\n{content}\n```",
+                    ephemeral=True
+                )
+
+            except Exception as e:
+                logging.error("Error reading logs", exc_info=True)
+                return await interaction.followup.send(f"Error reading log file: {e}", ephemeral=True)
+        elif action == "download":
+            # Try to open DM channel
+            try:
+                dm = await interaction.user.create_dm()
+            except Exception as e:
+                logging.error("Failed to open DM channel when requesting log file download", exc_info=True)
+                return await interaction.followup.send(
+                    "❌ Could not open DM channel — please allow DMs from server members.",
+                    ephemeral=True
+            )
+            try:
+                await dm.send(
+                    "📦 Here is your logfile:",
+                    file=discord.File(log_path)
+                )
+                return await interaction.followup.send(f"Logs sent to your DMs", ephemeral=True)
+            except Exception as e:
+                logging.error("Error sending log file", exc_info=True)
+                return await interaction.followup.send(f"Error sending log file: {e}", ephemeral=True)
+        elif action == "clear":
+            try:
+                # Truncate (clear contents) but keep the file existing
+                open(log_path, "w").close()
+                logging.info(f"Logs cleared by {interaction.user} ({interaction.user.id})")
+                return await interaction.followup.send(f"🧹 **logs** has been cleared successfully.", ephemeral=True)
+            except Exception as e:
+                logging.error("Error clearing log file", exc_info=True)
+                return await interaction.followup.send(f"Error clearing log file: {e}", ephemeral=True)
+        elif action == "help":
+                msg = (
+                    "ℹ️ **Logs Command Help**\n"
+                    "Use this command to read/download/clear logs.\n\n"
+                    "**Usage:** `/logs action:<read|download|clear>`\n"
+                    "- `read` → Read the last n amount of lines in logfile.\n"
+                    "- `download` → Sends downloadable logfile to DM.\n"
+                    "- `clear` → Clears the logfile.\n"
+                    "- `help` → Displays this help message."
+                )
+                return await interaction.followup.send(msg, ephemeral=True)
+        else:
+            msg = "⚠️ Invalid action. Use `/superadmin action:help` for usage info."
+            return await interaction.followup.send(msg, ephemeral=True)
+        
+        
+        
  
     async def slash_hello(self, interaction: discord.Interaction):
         await interaction.response.send_message(f"Hello {interaction.user.mention}! How's it hanging?")

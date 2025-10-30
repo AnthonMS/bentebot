@@ -42,8 +42,8 @@ class ollama_conn:
             messages = get_messages(response.message, True)
             
             async for part in self.chat(messages, context.llama_default_model):
-                sys.stdout.write(part['message']['content'])
-                sys.stdout.flush()
+                # sys.stdout.write(part['message']['content'])
+                # sys.stdout.flush()
                 
                 part_content = part['message']['content']
                 full_response += part_content
@@ -81,8 +81,8 @@ class ollama_conn:
             generator = await context.llama.chat(model, messages=messages, stream=True)
             async for part in generator:
                 sb.write(part['message']['content']) # write content to StringIO buffer
-                sys.stdout.write(part['message']['content'])
-                sys.stdout.flush()
+                # sys.stdout.write(part['message']['content'])
+                # sys.stdout.flush()
             
                 if milliseconds is None:
                     # If milliseconds is None, yield every time we get a return from the stream
