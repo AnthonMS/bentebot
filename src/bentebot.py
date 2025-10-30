@@ -196,6 +196,15 @@ class bentebot:
             )
         )
         
+        # /logs
+        context.discord.tree.add_command(
+            app_commands.Command(
+                name="logs",
+                description="Read/Download/Clear logs",
+                callback=self.slash_logs,
+            )
+        )
+        
     
     
     async def slash_trust_server(self, interaction: discord.Interaction, action:str):
@@ -449,13 +458,9 @@ class bentebot:
                 
         await interaction.response.send_message(msg, ephemeral=True)
  
-    ## async def slash_logs(self, interaction: discord.Interaction)
-    ### Slash command to see logs. there should be an action: "file" / "read" / "clear"
-    ###     file should make the log file downloadable in discord
-    ###     read should take another argument `amount` which take the amount of lines to read
-    ###     clear should clear the log file
-    ## Obviously superadmin
-    async def slash_logs(self, interaction: discord.Interaction, action: str):
+ 
+ 
+    async def slash_logs(self, interaction: discord.Interaction, action: str, lines:int=50):
         """
         Slash command handler for log management.
         - 'read': shows recent lines from bot.log
@@ -476,8 +481,8 @@ class bentebot:
             try:
                 # Read last 50 lines for brevity
                 with open(log_path, "r", encoding="utf-8") as f:
-                    lines = f.readlines()[-50:]
-                content = "".join(lines).strip()
+                    lines_read = f.readlines()[-lines:]
+                content = "".join(lines_read).strip()
                 if not content:
                     content = "(Log file is empty.)"
 
