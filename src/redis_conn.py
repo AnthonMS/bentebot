@@ -46,34 +46,16 @@ def save_message_redis(
 def get_messages(
     message:discord.Message, 
     format: bool = False
-) -> List[StoredMessageData]:
+) -> List[dict]:
     if not context.redis:
-        new_msg = StoredMessageData(
-            role="assistant" if message.author.id == context.discord.user.id else "user",
-            content=message.content,
-            id=message.id,
-            author_id=message.author.id,
-            author_name=message.author.name,
-            timestamp=datetime.datetime.utcnow().isoformat(),
-            attachments=[],
-        )
-        return [new_msg]
+        return [{"role": "assistant" if message.author.id == context.discord.user.id else "user", "content": message.content}]
 
     # Read stored messages
     raw = []
     for msg in context.redis.hvals(f"messages:{message.channel.id}"):
         if isinstance(msg, bytes):
             msg = msg.decode()
-        data = json.loads(msg)
-        raw.append(StoredMessageData(
-            id=data["id"],
-            author_id=data["author_id"],
-            author_name=data["author_name"],
-            role=data["role"],
-            content=data["content"],
-            timestamp=data["timestamp"],
-            attachments=data.get("attachments", []),
-        ))
+        raw.append(json.loads(msg))
 
     if not format:
         return raw
@@ -93,29 +75,10 @@ def get_messages(
         else:
             ts_str = ""
 
-
-        # class StoredMessageData:
-        #     id: int
-        #     author_id: int
-        #     author_name: str
-        #     role: str
-        #     content: str
-        #     timestamp: str
-        #     attachments: List[str]
-        
-        formatted.append(StoredMessageData(
-            id=m.id,
-            author_id=m.author_id,
-            author_name=m.author_name,
-            role=m.role,
-            content=f"{ts_str} {m.content}\n\nSent by: {m.author_name}",
-            timestamp=m.timestamp,
-            attachments=m.attachments
-        ))
-        # formatted.append({
-        #     "role": m["role"],
-        #     "content": f"{ts_str} {m['content']}\n\nSent by: {m["author_name"]}"
-        # })
+        formatted.append({
+            "role": m["role"],
+            "content": f"{ts_str} {m['content']}\n\nSent by: {m["author_name"]}"
+        })
         ## TODO: Take the attachments in the stored messages: "attachments": [a.url for a in attachments]
         ##          Check if any of them are images.
         ##          If they are images, we can include it in the chat using `images` argument
