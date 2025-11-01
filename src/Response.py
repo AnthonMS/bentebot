@@ -1,15 +1,17 @@
+from typing import Optional
 import io
+import discord
 
 class Response:
-    def __init__(self, message):
-        self.message = message
-        self.channel = message.channel
-        self.author = message.author
+    def __init__(self, message: discord.Message):
+        self.message: discord.Message = message
+        self.channel: Optional[discord.abc.Messageable] = message.channel
+        self.author: Optional[discord.abc.Messageable] = message.author
 
-        self.r = None
-        self.sb = io.StringIO()
+        self.r: Optional[discord.Message] = None
+        self.sb: io.StringIO = io.StringIO()
 
-    async def write(self, s, end=''):
+    async def write(self, s: str, end: str='') -> None:
         if self.sb.seek(0, io.SEEK_END) + len(s) + len(end) > 2000:
             self.r = None
             self.sb.seek(0, io.SEEK_SET)

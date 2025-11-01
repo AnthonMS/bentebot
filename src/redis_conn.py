@@ -1,7 +1,28 @@
-import json, datetime, sys
+import json, datetime
+from typing import Optional, List, Union
+from dataclasses import dataclass
+import discord
 import context
 
-def save_message_redis(message_id, message_content, author, channel_id, attachments = []):
+
+@dataclass
+class StoredMessageData:
+    id: int
+    author_id: int
+    author_name: str
+    role: str
+    content: str
+    timestamp: str
+    attachments: List[str]
+
+
+def save_message_redis(
+    message_id: Union[int, str], 
+    message_content: str, 
+    author: Union[discord.User, discord.Member], 
+    channel_id: Union[int, str], 
+    attachments: Optional[List[discord.Attachment]] = []
+) -> None:
     if not context.redis:
         return None
     
@@ -22,22 +43,43 @@ def save_message_redis(message_id, message_content, author, channel_id, attachme
         json.dumps(payload),
     )
     
-def get_messages(message, format: bool = False):
+def get_messages(
+    message:discord.Message, 
+    format: bool = False
+) -> List[StoredMessageData]:
     if not context.redis:
-        return [{"role": "assistant" if message.author.id == context.discord.user.id else "user", "content": message.content}]
+        new_msg = StoredMessageData(
+            role="assistant" if message.author.id == context.discord.user.id else "user",
+            content=message.content,
+            id=message.id,
+            author_id=message.author.id,
+            author_name=message.author.name,
+            timestamp=datetime.datetime.utcnow().isoformat(),
+            attachments=[],
+        )
+        return [new_msg]
 
     # Read stored messages
     raw = []
     for msg in context.redis.hvals(f"messages:{message.channel.id}"):
         if isinstance(msg, bytes):
             msg = msg.decode()
-        raw.append(json.loads(msg))
+        data = json.loads(msg)
+        raw.append(StoredMessageData(
+            id=data["id"],
+            author_id=data["author_id"],
+            author_name=data["author_name"],
+            role=data["role"],
+            content=data["content"],
+            timestamp=data["timestamp"],
+            attachments=data.get("attachments", []),
+        ))
 
     if not format:
         return raw
     
-    # Sort by timestamp
-    raw.sort(key=lambda m: m.get("timestamp", ""))
+    # # Sort by timestamp
+    # raw.sort(key=lambda m: m.get("timestamp", ""))
 
     formatted = []
     for m in raw:
@@ -51,12 +93,29 @@ def get_messages(message, format: bool = False):
         else:
             ts_str = ""
 
-        author_name = m["author_name"]
 
-        formatted.append({
-            "role": m["role"],
-            "content": f"{ts_str} {m['content']}\n\nSent by: {author_name}"
-        })
+        # class StoredMessageData:
+        #     id: int
+        #     author_id: int
+        #     author_name: str
+        #     role: str
+        #     content: str
+        #     timestamp: str
+        #     attachments: List[str]
+        
+        formatted.append(StoredMessageData(
+            id=m.id,
+            author_id=m.author_id,
+            author_name=m.author_name,
+            role=m.role,
+            content=f"{ts_str} {m.content}\n\nSent by: {m.author_name}",
+            timestamp=m.timestamp,
+            attachments=m.attachments
+        ))
+        # formatted.append({
+        #     "role": m["role"],
+        #     "content": f"{ts_str} {m['content']}\n\nSent by: {m["author_name"]}"
+        # })
         ## TODO: Take the attachments in the stored messages: "attachments": [a.url for a in attachments]
         ##          Check if any of them are images.
         ##          If they are images, we can include it in the chat using `images` argument
@@ -73,7 +132,10 @@ def get_messages(message, format: bool = False):
     return [system_instruction] + formatted
         
         
-def get_message(channel_id: int, message_id: int):
+def get_message(
+    channel_id: int, 
+    message_id: int
+) -> Optional[StoredMessageData]:
     if not context.redis:
         return None
 
@@ -84,7 +146,9 @@ def get_message(channel_id: int, message_id: int):
     return None
 
 
-def get_all_message_ids(channel_id: int):
+def get_all_message_ids(
+    channel_id: int
+) -> List[str]:
     if not context.redis:
         return []
 
@@ -97,7 +161,9 @@ def get_all_message_ids(channel_id: int):
     return message_ids
 
 
-def delete_messages(channel_id: int):
+def delete_messages(
+    channel_id: int
+) -> bool:
     if not context.redis:
         return False
 
@@ -107,7 +173,9 @@ def delete_messages(channel_id: int):
 
 
     
-def is_superadmin(user_id: int):
+def is_superadmin(
+    user_id: int
+) -> bool:
     if context.super_admin_ids is not None:
         super_admin_ids = [int(id.strip()) for id in context.super_admin_ids.split(",")]
         if (user_id in super_admin_ids):
@@ -118,7 +186,9 @@ def is_superadmin(user_id: int):
             return True
     return False
 
-def add_super_admin(user_id: int):
+def add_super_admin(
+    user_id: int
+) -> bool:
     if not context.redis:
         return False
     
@@ -129,7 +199,9 @@ def add_super_admin(user_id: int):
     context.redis.sadd("super_admins", str(user_id))
     return True
 
-def remove_super_admin(user_id: int):
+def remove_super_admin(
+    user_id: int
+) -> bool:
     if not context.redis:
         return False
     
@@ -143,7 +215,10 @@ def remove_super_admin(user_id: int):
 
     
     
-def is_admin(user_id: int, guild_id: int = None):
+def is_admin(
+    user_id: int, 
+    guild_id: int = None
+) -> bool:
     superadmin_check = is_superadmin(user_id)
     if superadmin_check:
         return True
@@ -154,7 +229,10 @@ def is_admin(user_id: int, guild_id: int = None):
     
     return False
 
-def add_server_admin(user_id: int, guild_id: int):
+def add_server_admin(
+    user_id: int, 
+    guild_id: int
+) -> bool:
     if not context.redis:
         return False
     
@@ -165,7 +243,10 @@ def add_server_admin(user_id: int, guild_id: int):
     context.redis.sadd(f"admins:{guild_id}", str(user_id))
     return True
 
-def remove_server_admin(user_id: int, guild_id: int):
+def remove_server_admin(
+    user_id: int, 
+    guild_id: int
+) -> bool:
     if not context.redis:
         return False
     
@@ -179,7 +260,9 @@ def remove_server_admin(user_id: int, guild_id: int):
 
 
 
-def is_dm_allowed(user_id: int):
+def is_dm_allowed(
+    user_id: int
+) -> bool:
     admin_check = is_admin(user_id)
     if admin_check:
         return True
@@ -191,7 +274,9 @@ def is_dm_allowed(user_id: int):
     
     return False
 
-def add_dm_whitelist(user_id: int):
+def add_dm_whitelist(
+    user_id: int
+) -> bool:
     if not context.redis:
         return False
     
@@ -202,7 +287,9 @@ def add_dm_whitelist(user_id: int):
     context.redis.sadd("dm_whitelist", str(user_id))
     return True
 
-def remove_dm_whitelist(user_id: int):
+def remove_dm_whitelist(
+    user_id: int
+) -> bool:
     if not context.redis:
         return False
     
@@ -216,7 +303,9 @@ def remove_dm_whitelist(user_id: int):
     
     
     
-def is_trusted_server(server_id: int):
+def is_trusted_server(
+    server_id: int
+) -> bool:
     if context.discord_server_ids is not None:
         discord_server_ids = [int(id.strip()) for id in context.discord_server_ids.split(",")]
         if (server_id in discord_server_ids):
@@ -228,7 +317,9 @@ def is_trusted_server(server_id: int):
         
     return False
 
-def add_trusted_server(server_id: int):
+def add_trusted_server(
+    server_id: int
+) -> bool:
     if not context.redis:
         return False
     
@@ -239,7 +330,9 @@ def add_trusted_server(server_id: int):
     context.redis.sadd("trusted_servers", str(server_id))
     return True
         
-def remove_trusted_server(server_id: int):
+def remove_trusted_server(
+    server_id: int
+) -> bool:
     if not context.redis:
         return False
 
@@ -285,16 +378,21 @@ def remove_trusted_server(server_id: int):
         
 
 
-def set_current_model(channel_id:int, new_model:str):
+def set_current_model(
+    channel_id:int, 
+    new_model:str
+) -> bool:
     if context.redis:
         context.redis.set(f"model:{channel_id}", new_model)
         return True
     
     return False
 
-def get_current_model(channel_id:int):
+def get_current_model(
+    channel_id:int
+) -> str:
     if context.redis:
-        model = context.redis.get(f"model:{channel_id}")  # no await
+        model = context.redis.get(f"model:{channel_id}")
         if model:
             if isinstance(model, bytes):
                 model = model.decode()

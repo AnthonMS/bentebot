@@ -44,7 +44,7 @@ class bentebot:
         
         self.register_slash_commands()
         
-    def run(self, token):
+    def run(self, token:str):
         try:
             context.discord.run(token)
         except Exception:
@@ -72,7 +72,7 @@ class bentebot:
 
 
 
-    async def on_message(self, message):
+    async def on_message(self, message:discord.Message):
         if context.discord.user == message.author:
             # don't respond to ourselves
             return
@@ -87,7 +87,6 @@ class bentebot:
             trusted_server = is_trusted_server(message.guild.id)
             if not trusted_server:
                 return
-            
             ## TODO: Before saving msg to redis, check if this channel is on a ignore list
             ##      TODO 2: Create ignore list logic. Redis getters & setters and implementation
             save_message_redis(message_id, message_content, author, channel_id, attachments)
@@ -96,7 +95,6 @@ class bentebot:
             if context.discord.user not in message.mentions:
                 return
             
-            ## TODO: Should only respond to users with a certain role attached to them: "bot commander", or if they are admins.
             await self.on_channel_message(message)
         else: # if DM
             dm_allowed = is_dm_allowed(message.author.id)
@@ -112,12 +110,12 @@ class bentebot:
     
     
     
-    async def on_channel_message(self, message):
+    async def on_channel_message(self, message:discord.Message):
         ## Create and start writing task with ollama chatbot
         self.ollama_conn.add_task(message)
     
     
-    async def on_direct_message(self, message):
+    async def on_direct_message(self, message:discord.Message):
         ## Create and start writing task with ollama chatbot
         self.ollama_conn.add_task(message)
     
@@ -539,7 +537,7 @@ class bentebot:
                 )
                 return await interaction.followup.send(msg, ephemeral=True)
         else:
-            msg = "⚠️ Invalid action. Use `/superadmin action:help` for usage info."
+            msg = "⚠️ Invalid action. Use `/logs action:help` for usage info."
             return await interaction.followup.send(msg, ephemeral=True)
         
         

@@ -1,6 +1,8 @@
 import sys, os, io, datetime
 import asyncio
 import logging
+import discord
+from typing import List, Dict, Any, AsyncGenerator
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 import context
 from src.Response import Response
@@ -13,16 +15,16 @@ class ollama_conn:
     def __init__(self):
         self.writing_tasks = {}
         
-    def add_task(self, message):
+    def add_task(self, message:discord.Message):
         r = Response(message)
         writing_task = asyncio.create_task(self.writing(r))
         self.writing_tasks[message.id] = (r, writing_task)
     
-    def remove_task(self, message_id):
+    def remove_task(self, message_id:int):
         del self.writing_tasks[message_id] # Remove the task from the dictionary
 
     
-    async def think(self, message, timeout=999):
+    async def think(self, message:discord.Message, timeout:int=999):
         try:
             await message.add_reaction('🤔')
         except asyncio.CancelledError:
@@ -35,7 +37,7 @@ class ollama_conn:
             await message.remove_reaction('🤔', context.discord.user)
             
             
-    async def writing(self, response):
+    async def writing(self, response:Response):
         full_response = ""
         try:
             thinking = asyncio.create_task(self.think(response.message))
@@ -72,7 +74,11 @@ class ollama_conn:
                     # attachments=bot_msg.attachments,
                 )
     
-    async def chat(self, messages, model=None, milliseconds=1000):
+    async def chat(self, 
+                   messages: List[Dict[str, Any]], 
+                   model:str|None=None, 
+                   milliseconds:int=1000
+    ) -> AsyncGenerator[Dict[str, Any], None]:
         if model is None:
             model = context.llama_default_model
         sb = io.StringIO() # create new StringIO object that can write and read from a string buffer
@@ -122,9 +128,9 @@ class ollama_conn:
             logging.error("Error getting AI generate response", exc_info=True)
             
 
-async def get_model_list():
-    model_list = await context.llama.list()
-    available_models = []
+async def get_model_list() -> List[str]:
+    model_list: Dict[str, Any] = await context.llama.list()
+    available_models: List[str] = []
     for model in model_list['models']:
         # Use the correct attribute
         available_models.append(model.model)  
