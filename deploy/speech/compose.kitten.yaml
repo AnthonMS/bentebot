@@ -1,0 +1,25 @@
+# Optional separate KittenTTS 2 service, normally on the main PC's 4090.
+# Not an override of compose.yaml: start this file as its own project.
+name: bentebot-kitten
+
+services:
+  kitten:
+    build:
+      context: "https://github.com/KittenML/KittenTTS.git#afd9dfda7ffdca35dd0151b149c221140c80ec3f"
+      dockerfile: kittenml/kittentts2/docker/Dockerfile
+    image: bentebot-kitten:reviewed
+    restart: unless-stopped
+    gpus: all
+    shm_size: "2gb"
+    ports:
+      - "${KITTEN_PORT:-8767}:8000"
+    environment:
+      KITTENML_BACKEND: vllm
+      # This is a starting cap on a 24GB GPU, not a measured minimum memory requirement.
+      # Adjust alongside the memory occupied by your existing LLM.
+      KITTENML_VLLM_OPTIONS: '{"gpu_memory_utilization":0.35}'
+    volumes:
+      - kitten-cache:/cache
+
+volumes:
+  kitten-cache:

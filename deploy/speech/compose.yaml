@@ -1,0 +1,48 @@
+# Separate inference deployment. Bentebot's own Compose file never includes these services.
+name: bentebot-speech
+
+services:
+  stt:
+    build:
+      context: .
+      dockerfile: Dockerfile.cpu
+    image: bentebot-whisperlivekit:cpu-reviewed
+    restart: unless-stopped
+    ports:
+      - "${SPEECH_BIND_IP:?Set the server private LAN address}:${STT_PORT:-8765}:8000"
+    environment:
+      CUDA_VISIBLE_DEVICES: "-1"
+      OMP_NUM_THREADS: "${SPEECH_CPU_THREADS:-4}"
+      WLK_BEAM_SIZE: "${STT_BEAM_SIZE:-1}"
+      WLK_MULTILINGUAL: "true"
+      WLK_COMPUTE_TYPE: "${STT_COMPUTE_TYPE:-int8}"
+    volumes:
+      - whisper-cache:/root/.cache
+      - ./doctor.py:/opt/bentebot-speech/doctor.py:ro
+    command:
+      - --backend
+      - faster-whisper
+      - --backend-policy
+      - localagreement
+      - --model
+      - "${STT_MODEL:-base}"
+      - --language
+      - "${STT_LANGUAGE:-auto}"
+      - --min-chunk-size
+      - "${STT_CHUNK_SECONDS:-0.5}"
+      - --pcm-input
+
+  tts:
+    # Upstream's documented CPU tag floats. Record/pin its digest after validating your deployment.
+    image: ghcr.io/speaches-ai/speaches:latest-cpu
+    restart: unless-stopped
+    ports:
+      - "${SPEECH_BIND_IP:?Set the server private LAN address}:${TTS_PORT:-8766}:8000"
+    environment:
+      OMP_NUM_THREADS: "${SPEECH_CPU_THREADS:-4}"
+    volumes:
+      - tts-cache:/home/ubuntu/.cache/huggingface/hub
+
+volumes:
+  whisper-cache:
+  tts-cache:

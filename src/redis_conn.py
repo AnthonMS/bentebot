@@ -27,7 +27,7 @@ def save_message_redis(
         return None
     
     # message_content = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S') + '\n\n' + message_content + "\n\nSent by: " + str(author.name)
-    
+    # TODO: Create logic to write message to log file, this way I can see what the attachments actually look like when there is one in the message.
     payload = {
         "id": message_id,
         "author_id": author.id,

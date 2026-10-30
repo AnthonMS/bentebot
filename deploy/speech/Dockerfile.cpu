@@ -1,0 +1,16 @@
+# Separate inference image. No models or inference dependencies enter the bot image.
+FROM python:3.12-slim-bookworm
+ENV PYTHONUNBUFFERED=1 HF_HOME=/root/.cache/huggingface CUDA_VISIBLE_DEVICES=-1
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg libgomp1 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir torch==2.7.1 torchaudio==2.7.1 --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir faster-whisper==1.2.1 \
+       "whisperlivekit @ https://github.com/QuentinFuxa/WhisperLiveKit/archive/eb92c115ee7abc1e161b0b2159da31785b0f5566.zip"
+COPY tune_backend.py /opt/bentebot-speech/tune_backend.py
+RUN python /opt/bentebot-speech/tune_backend.py
+# faster-whisper 1.2.1 requires the av.open API available before PyAV 19.
+RUN pip install --no-cache-dir av==16.1.0 \
+    && python -c "import io,wave; from faster_whisper.audio import decode_audio; b=io.BytesIO(); w=wave.open(b,'wb'); w.setparams((1,2,16000,0,'NONE','not compressed')); w.writeframes(bytes(8000)); w.close(); b.seek(0); assert decode_audio(b).shape == (4000,)"
+EXPOSE 8000
+ENTRYPOINT ["wlk", "--host", "0.0.0.0"]
+CMD ["--backend", "faster-whisper", "--backend-policy", "localagreement", "--model", "base", "--language", "auto", "--pcm-input"]

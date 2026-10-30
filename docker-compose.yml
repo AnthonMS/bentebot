@@ -1,28 +1,36 @@
-version: "3.9"
-
 services:
-  bentebot-discord:
+  bentebot:
     build: .
-    image: bentebot-discord
-    container_name: bentebot-discord
+    image: bentebot:local
+    init: true
+    restart: unless-stopped
+    env_file:
+      - .env
     environment:
-      ENV: docker
-      DISCORD_TOKEN: ${DISCORD_TOKEN}
-      OLLAMA_HOST_URL: ${OLLAMA_HOST_URL}
-      OLLAMA_DEFAULT_MODEL: ${OLLAMA_DEFAULT_MODEL}
-      BASIC_AUTH_USERNAME: ${BASIC_AUTH_USERNAME}
-      BASIC_AUTH_PASSWORD: ${BASIC_AUTH_PASSWORD}
-      VERIFY_SSL: ${VERIFY_SSL}
-      REDIS_HOST: ${REDIS_HOST}           # points to the redis service
-      REDIS_PORT: ${REDIS_PORT}
-    depends_on:
-      - redis
-    restart: unless-stopped
+      BENTEBOT_DATABASE_PATH: /app/data/bentebot.sqlite3
+      BENTEBOT_HEALTH_PORT: "8080"
+    volumes:
+      - bentebot-data:/app/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # No inbound ports are needed: Discord and inference connections are outbound.
+    # For Unraid local appdata, replace the named volume with:
+    # - /mnt/user/appdata/bentebot/data:/app/data
+    # Ensure this directory is writable by container UID 99 / GID 100 first.
+    # Never use an SMB/NFS-mounted SQLite database.
 
-
-  redis:
-    image: redis:7-alpine
-    container_name: bentebot-redis
-    ports:
-      - "6379:6379"             # optional: exposes Redis to host
-    restart: unless-stopped
+volumes:
+  bentebot-data:

@@ -1,0 +1,15 @@
+# Install as docker-compose.override.yml beside the bot's existing Compose file.
+# Ordinary docker compose commands will then keep the viewer configuration.
+services:
+  bentebot:
+    environment:
+      BENTEBOT_SCREEN_ENABLED: "true"
+      BENTEBOT_NATIVE_VIEWER_ENABLED: "true"
+      BENTEBOT_NATIVE_VIEWER_ID: ${BENTEBOT_NATIVE_VIEWER_ID:?Set an authorized viewer account ID}
+      BENTEBOT_NATIVE_VIEWER_KEY_FILE: /run/secrets/viewer_control_key
+      BENTEBOT_NATIVE_STREAM_PROBE_ENABLED: "false"
+    secrets:
+      - viewer_control_key
+secrets:
+  viewer_control_key:
+    file: ${BENTEBOT_VIEWER_SECRETS_DIR:?Set an absolute private secrets directory}/control-key

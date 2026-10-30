@@ -1,0 +1,49 @@
+name: bentebot-web-tools
+services:
+  searxng:
+    # Verified in upstream Docker Hub tags on 2026-10-28. A dated build, not latest.
+    image: docker.io/searxng/searxng:2026.10.27-b5ed73fcb
+    init: true
+    restart: unless-stopped
+    user: "977:977"
+    entrypoint: [/bin/sh, /opt/bentebot/start.sh]
+    environment:
+      GRANIAN_HOST: "0.0.0.0"
+      GRANIAN_PORT: "8080"
+      GRANIAN_WORKERS: "1"
+      # Upstream SQLite caches default to tempfile.gettempdir().
+      TMPDIR: /var/cache/searxng
+      SEARXNG_PUBLIC_INSTANCE: "false"
+      SEARXNG_LIMITER: "false"
+      FORCE_OWNERSHIP: "false"
+    volumes:
+      - ./settings.yml:/etc/searxng/settings.yml:ro
+      - ./start.sh:/opt/bentebot/start.sh:ro
+      - search-cache:/var/cache/searxng
+    networks: [bot]
+    # No published host port. Only the private Docker bot network can reach it.
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    cpus: 1.0
+    stop_grace_period: 15s
+    healthcheck:
+      test: [CMD, /usr/local/searxng/.venv/bin/python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      start_period: 30s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "2"
+volumes:
+  search-cache:
+networks:
+  bot:
+    external: true
+    name: bentebot_default

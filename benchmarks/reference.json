@@ -1,0 +1,20 @@
+{
+  "recorded": "2026-10-27 to 2026-10-30",
+  "limitations": [
+    "Development observations, not a controlled hardware comparison or service guarantee.",
+    "CPU observations include different desktop and server CPUs; exact CPU SKUs were not recorded in every receipt.",
+    "Different phrases, model settings, cold/warm states and unrelated GPU workloads affect results.",
+    "No raw audio, transcripts, account IDs, host addresses or credentials are included."
+  ],
+  "measurements": [
+    {"task": "STT speech-end to final", "hardware": "i5-class server CPU", "milliseconds": [7324, 7283], "kind": "two different Discord turns"},
+    {"task": "STT speech-end to final", "hardware": "GTX 1080", "milliseconds": [766, 750, 766], "kind": "synthetic real-time speech, Whisper base, 800ms endpointing"},
+    {"task": "STT whole-file transcription", "hardware": "GTX 1080", "input_audio_seconds": 3.221, "milliseconds": [804, 206], "kind": "first/warm inference, int8_float32, not streaming latency"},
+    {"task": "English Kokoro TTS", "hardware": "i5-class server CPU", "output_audio_seconds": 1.5786, "milliseconds": [3063, 1438, 1625], "kind": "first/warm/warm API synthesis"},
+    {"task": "English Kokoro TTS", "hardware": "GTX 1080", "output_audio_seconds": 1.8773, "milliseconds": [2312, 188], "kind": "first/warm API synthesis; output differs from CPU sample"},
+    {"task": "Sound and tone analysis", "hardware": "desktop CPU", "input_audio_seconds": 3.2044, "milliseconds": [344], "kind": "single synthetic Danish speech window"},
+    {"task": "Audio analysis pipeline", "hardware": "GTX 1080", "milliseconds": [83.1, 66, 62, 83, 325.3, 115.5, 141], "kind": "seven Discord status snapshots; tone analysis is not requested in every window"},
+    {"task": "Danish Piper TTS", "hardware": "desktop CPU", "output_audio_seconds": 3.2044, "milliseconds": [304.5], "kind": "single API synthesis; CPU even with CUDA audio helper"},
+    {"task": "Sound and tone analysis", "hardware": "RTX 4090", "input_audio_seconds": 3, "milliseconds": [188, 172, 187], "kind": "three synthetic speech windows, separate qualification"}
+  ]
+}

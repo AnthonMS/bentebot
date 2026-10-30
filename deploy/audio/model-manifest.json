@@ -1,0 +1,56 @@
+[
+  {
+    "name": "yamnet.tflite",
+    "url": "https://storage.googleapis.com/mediapipe-models/audio_classifier/yamnet/float32/1/yamnet.tflite",
+    "sha256": "4d8b4a53282dc83ef04e3e7dbc4fbc98082e34e44ed798e16c3a0cdd4c584faf",
+    "bytes": 4126810
+  },
+  {
+    "name": "emotion2vec_plus_base.onnx",
+    "url": "https://huggingface.co/pankotaro/emotion2vec-plus-base-onnx/resolve/334d4376993c381f059cc36d2c6ed05cbfec5ca1/emotion2vec_plus_base.onnx",
+    "sha256": "a9ddcc2f4254c3da1dc2a51ea5e38df32e2a84724519e343499f05f0ea2b3506",
+    "bytes": 373159295
+  },
+  {
+    "name": "emotion2vec_head.json",
+    "url": "https://huggingface.co/pankotaro/emotion2vec-plus-base-onnx/resolve/334d4376993c381f059cc36d2c6ed05cbfec5ca1/emotion2vec_head.json",
+    "sha256": "69666ff0d2873f016f5a8187b685e32a2c419130876bf97b069c981c44cfe02c",
+    "bytes": 128472
+  },
+  {
+    "name": "da_DK-talesyntese-medium.onnx",
+    "url": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/da/da_DK/talesyntese/medium/da_DK-talesyntese-medium.onnx",
+    "sha256": "b9271efd25f7b8494bbd28d48dd675c8c119daa284f3ee488008935f515f1241",
+    "bytes": 63201294
+  },
+  {
+    "name": "da_DK-talesyntese-medium.onnx.json",
+    "url": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/da/da_DK/talesyntese/medium/da_DK-talesyntese-medium.onnx.json",
+    "sha256": "89fe13bd251406cc0088570d103ea7ac35823211d8466faf913268ab8506f41b",
+    "bytes": 4878
+  },
+  {
+    "name": "DANISH_MODEL_CARD",
+    "url": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/da/da_DK/talesyntese/medium/MODEL_CARD",
+    "sha256": "b5b7a51d4d815a307594619a519eb389b2e17839b30c0eb69a39d3ade5b1ed65",
+    "bytes": 308
+  },
+  {
+    "name": "yamnet.onnx",
+    "url": "https://huggingface.co/audiomagic/yamnet-onnx/resolve/f25b741c2f0bdc6d7e6db24b5fddda23347dbafd/yamnet.onnx",
+    "sha256": "d3835ffbbd4a1bb3e777f0ca217b5007907f5171dd5d17c4236b95b2af8f908e",
+    "bytes": 16093355
+  },
+  {
+    "name": "yamnet_class_map.csv",
+    "url": "https://huggingface.co/audiomagic/yamnet-onnx/resolve/f25b741c2f0bdc6d7e6db24b5fddda23347dbafd/yamnet_class_map.csv",
+    "sha256": "cdf24d193e196d9e95912a2667051ae203e92a2ba09449218ccb40ef787c6df2",
+    "bytes": 14096
+  },
+  {
+    "name": "YAMNET_ONNX_LICENSE",
+    "url": "https://huggingface.co/audiomagic/yamnet-onnx/resolve/f25b741c2f0bdc6d7e6db24b5fddda23347dbafd/LICENSE",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "bytes": 11358
+  }
+]

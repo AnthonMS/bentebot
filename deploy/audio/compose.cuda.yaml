@@ -1,0 +1,13 @@
+# Overlay for the same helper service/container; no duplicate API or network.
+services:
+  audio:
+    build:
+      dockerfile: deploy/audio/Dockerfile.cuda
+    image: bentebot-awareness:pascal-0.3.3
+    gpus: all
+    environment:
+      BENTEBOT_AUDIO_DEVICE: cuda
+      BENTEBOT_AUDIO_GPU_MEMORY_MB: ${BENTEBOT_AUDIO_GPU_MEMORY_MB:-1024}
+      NVIDIA_VISIBLE_DEVICES: ${BENTEBOT_AUDIO_GPU_DEVICE:-all}
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    mem_limit: 3g

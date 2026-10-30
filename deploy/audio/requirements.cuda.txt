@@ -1,0 +1,9 @@
+# CUDA 12.6 / cuDNN 9.5 retain Pascal support. Do not float these to CUDA 13.
+onnxruntime-gpu==1.20.2
+nvidia-cuda-runtime-cu12==12.6.77
+nvidia-cuda-nvrtc-cu12==12.6.85
+nvidia-cublas-cu12==12.6.4.1
+nvidia-cudnn-cu12==9.5.1.17
+nvidia-cufft-cu12==11.3.0.4
+nvidia-curand-cu12==10.3.7.77
+nvidia-nvjitlink-cu12==12.6.85

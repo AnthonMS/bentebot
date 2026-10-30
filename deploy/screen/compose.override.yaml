@@ -1,0 +1,6 @@
+# Optional screen capture ingress for Unraid. This file is never loaded automatically.
+# Run from the repository root with both -f arguments shown in deploy/screen/README.md.
+services:
+  bentebot:
+    ports:
+      - "${BENTEBOT_SCREEN_BIND_IP:?Set the server private LAN address}:${BENTEBOT_SCREEN_PORT:-8768}:8080"

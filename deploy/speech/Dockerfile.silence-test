@@ -1,0 +1,4 @@
+# Reuses the installed Pascal image. No CUDA, Torch or model download layers.
+FROM bentebot-whisperlivekit:pascal-0.2.26
+COPY deploy/speech/tune_silence.py /opt/bentebot-speech/tune_silence.py
+RUN python /opt/bentebot-speech/tune_silence.py

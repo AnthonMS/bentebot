@@ -1,0 +1,9 @@
+# Copy to a private directory. Actual credentials come from a private env file.
+model_list:
+  - model_name: bentebot-chat
+    litellm_params:
+      model: os.environ/CHAT_UPSTREAM_MODEL
+      api_base: os.environ/CHAT_UPSTREAM_BASE_URL
+      api_key: os.environ/CHAT_UPSTREAM_API_KEY
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

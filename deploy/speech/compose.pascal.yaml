@@ -1,0 +1,15 @@
+# EXPERIMENTAL: GTX 1080 / CC6.1 profile; requires a working NVIDIA container runtime.
+# Use alongside compose.yaml. It is source-reviewed, not GPU-benchmarked on this machine.
+services:
+  stt:
+    build:
+      context: .
+      dockerfile: Dockerfile.pascal
+    image: bentebot-whisperlivekit:pascal-experimental
+    gpus: all
+    environment:
+      # Override the CPU profile's device mask. CTranslate2 auto-selects the exposed GPU.
+      CUDA_VISIBLE_DEVICES: "0"
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      WLK_COMPUTE_TYPE: "${STT_CUDA_COMPUTE_TYPE:-int8_float32}"

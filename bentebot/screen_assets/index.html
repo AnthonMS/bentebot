@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Bentebot screen companion</title>
+  <link rel="stylesheet" href="/screen/style.css">
+  <script src="/screen/app.js" defer></script>
+</head>
+<body>
+<main>
+  <p class="eyebrow">Bentebot companion</p>
+  <h1>Share a window with Bentebot</h1>
+  <p>This sends occasional pictures from the window you choose. It does not read Discord's Go Live stream.</p>
+  <p>Run <code>/screen start</code> in your Discord call, then paste your private pairing code below.</p>
+  <form id="pair-form">
+    <label for="code">One-time pairing code</label>
+    <div class="row"><input id="code" type="password" autocomplete="off" required maxlength="200"><button id="pair" type="submit">Pair</button></div>
+  </form>
+  <p id="identity"></p>
+  <div class="row"><button id="start" disabled>Choose a window and share</button><button id="stop" disabled>Stop sharing</button></div>
+  <p id="status" role="status">Not paired. No screen capture is active.</p>
+  <video id="preview" autoplay muted playsinline></video>
+  <p class="fine">Only choose content you intend everyone in the bound call to hear about. Joining or leaving the call invalidates this session. Raw images expire from the bot's memory; descriptions in replies can remain in its conversation history.</p>
+</main>
+</body>
+</html>

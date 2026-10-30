@@ -1,0 +1,13 @@
+# Merge ONLY these entries into the existing LiteLLM model_list; do not replace its config.
+# CLIProxyAPI advertised these model IDs during inspection. Listing alone is not an inference test.
+model_list:
+  - model_name: bentebot-openai
+    litellm_params:
+      model: openai/gpt-6-luna
+      api_base: os.environ/CLIPROXY_BASE_URL
+      api_key: os.environ/CLIPROXY_API_KEY
+  - model_name: bentebot-claude
+    litellm_params:
+      model: openai/claude-haiku-4-5-20251001
+      api_base: os.environ/CLIPROXY_BASE_URL
+      api_key: os.environ/CLIPROXY_API_KEY

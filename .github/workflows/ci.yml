@@ -1,0 +1,37 @@
+name: Validate Bentebot
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  tests:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install Linux codec
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libopus0
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python scripts/check.py
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t bentebot:test .
+      - run: docker run --rm --network none bentebot:test python -m bentebot --check
+      - name: Check codec and non-root SQLite volume
+        run: >-
+          docker run --rm --network none bentebot:test python -c
+          "import os,discord; from bentebot.storage import Store;
+          assert os.getuid() != 0;
+          db=Store('/app/data/test.sqlite3'); db.close();
+          enc=discord.opus.Encoder();
+          assert len(discord.opus.Decoder().decode(enc.encode(bytes(3840),960),fec=False)) == 3840"

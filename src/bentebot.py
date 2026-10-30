@@ -83,6 +83,8 @@ class bentebot:
         channel_id = message.channel.id
         attachments = message.attachments
         
+        message.add_reaction('💩')
+
         if message.guild is not None: # If server
             trusted_server = is_trusted_server(message.guild.id)
             if not trusted_server:
@@ -403,8 +405,8 @@ class bentebot:
             
     
     
-    ## TODO: Create slash command to pull new models - (Superadmin only)
-    ## TODO: Create slash command to delete models - (Superadmin only)
+    ## TODO: Create action to pull new models - (Superadmin only)
+    ## TODO: Create action to delete models - (Superadmin only)
     async def slash_model(self, interaction: discord.Interaction, action: str = "current", model: str = None):
         admin_check = is_admin(interaction.user.id, interaction.guild.id if interaction.guild else None)
         if not admin_check:

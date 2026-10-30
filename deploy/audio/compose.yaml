@@ -1,0 +1,34 @@
+name: bentebot-awareness
+services:
+  audio:
+    build:
+      context: ../..
+      dockerfile: deploy/audio/Dockerfile
+    image: bentebot-awareness:cpu-0.3.3
+    init: true
+    restart: unless-stopped
+    # Only the published LAN endpoint is used; reuse the existing bridge subnet.
+    network_mode: bridge
+    environment:
+      BENTEBOT_AUDIO_TOKEN: ${BENTEBOT_AUDIO_TOKEN:?Set the private audio API token}
+      BENTEBOT_AUDIO_MODEL_DIR: /models
+      BENTEBOT_AUDIO_DEVICE: cpu
+    ports:
+      - "${BENTEBOT_AUDIO_BIND_IP:?Set the server private LAN address}:18769:18769"
+    volumes:
+      - ../../data/audio-models:/models:ro
+    cpus: 2
+    mem_limit: 2g
+    pids_limit: 128
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,noexec,nosuid
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

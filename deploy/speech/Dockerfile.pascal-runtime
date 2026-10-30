@@ -1,0 +1,5 @@
+# Permanent runtime, derived from the retained pinned Pascal dependency image.
+# Build from repository root with -f deploy/speech/Dockerfile.pascal-runtime.
+FROM bentebot-whisperlivekit:pascal-0.2.26
+COPY deploy/speech/tune_silence.py /opt/bentebot-speech/tune_silence.py
+RUN python /opt/bentebot-speech/tune_silence.py

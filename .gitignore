@@ -31,3 +31,66 @@ bot.log
 # Ignore system files
 .DS_Store
 Thumbs.db
+
+# Local test dependencies and persistent bot state
+.test-deps/
+.pytest_cache/
+.ruff_cache/
+data/
+*.sqlite3*
+artifacts/
+deploy/speech/pc.env
+**/secrets/
+
+# AI session memory, never commit (public repo)
+AI/
+
+# Private AI work notes, research and operator guides. The public README is intentional.
+*.md
+*.MD
+*.[mM][dD]
+*.markdown
+!/readme.md
+!/README.md
+
+# Local deployment operations and historical trials, not portable release files.
+deploy/upgrades/
+deploy/speech/compose.*test.yaml
+deploy/speech/compose.*-rollback.yaml
+deploy/speech/compose.unraid*.yaml
+deploy/speech/compose.pc.yaml
+deploy/speech/cleanup_*.sh
+deploy/speech/collect_*.sh
+deploy/speech/gpu_inventory.sh
+deploy/web-tools/collect-small-stream.sh
+deploy/web-tools/inspect-existing-search.sh
+deploy/speech-router/
+scripts/nas_fallback_policy.py
+tests/test_nas_fallback_policy.py
+
+# Local overrides, credentials, exported data and model weights.
+*.local.yaml
+*.local.yml
+docker-compose.override.yml
+docker-compose.override.yaml
+.env.*
+*.private
+*.pem
+*.key
+*.p12
+*.pfx
+*.sqlite*
+*.db
+*.db-*
+*.onnx
+*.tflite
+*.gguf
+*.safetensors
+*.wav
+*.mp3
+*.mp4
+*.csv
+*.zip
+outputs/
+.venv/
+venv/
