@@ -28,6 +28,8 @@ from .enrollment import VoiceSpeechBank
 from .memory import Memory
 from .model_aliases import canonical_model
 from .model_warmth import VoiceModelWarmth
+from .music import MusicService
+from .music_commands import handle_music_voice, install_music
 from .native_stream import NativeStreamProbe, VoiceMediaAudit
 from .native_viewer import NativeViewerBroker, ViewerTarget, control_key
 from .permissions import AccessPolicy
@@ -201,6 +203,7 @@ class BenteBot(commands.Bot):
         )
         self.screen_awareness = ScreenAwareness(settings, self.screens, self.policy, self.vision_chat.stream)
         self.voice_sessions: dict[int, tuple[VoiceConversation, VoiceReceiver, DiscordPlayback]] = {}
+        self.music = MusicService(settings) if settings.music_enabled else None
         self._voice_locks: dict[int, asyncio.Lock] = {}
         self._alone_tasks: dict[int, asyncio.Task] = {}
         self._voice_membership_versions: dict[int, int] = {}
@@ -267,6 +270,8 @@ class BenteBot(commands.Bot):
 
     async def on_ready(self):
         self.accepting = True
+        if self.music:
+            self.music.start_index()
         log.info(
             "Bentebot ready version=%s: %s; %s permitted servers",
             __version__,
@@ -879,6 +884,8 @@ class BenteBot(commands.Bot):
         task.add_done_callback(self.text_tasks.discard)
 
     async def handle_spoken_control(self, guild_id: int, channel_id: int, user_id: int, text: str) -> bool:
+        if await handle_music_voice(self, guild_id, channel_id, user_id, text):
+            return True
         call = self.voice_sessions.get(guild_id)
         output_held = bool(call and getattr(call[0], "output_held", False))
         hold_epoch = getattr(call[0], "output_hold_epoch", 0) if call else 0
@@ -1179,7 +1186,9 @@ class BenteBot(commands.Bot):
         if client.channel.id != channel.id:
             await client.disconnect(force=True)
             raise ValueError("The voice channel changed while joining; use /voice join again.")
-        playback = DiscordPlayback(client)
+        playback = DiscordPlayback(
+            client, mixed=self.settings.music_enabled, music_volume=self.settings.music_volume
+        )
         source = Source("channel", channel.id, guild_id)
 
         async def audience():
@@ -1260,7 +1269,14 @@ class BenteBot(commands.Bot):
         receiver.set_members(m.id for m in channel.members)
         if self.settings.native_viewer_enabled:
             receiver.sink.ignored_user_ids = frozenset({self.settings.native_viewer_id})
-        receiver.on_frame = self.enrollments.feed
+
+        def observe_frame(user_id, channel_id, frame, voiced):
+            self.enrollments.feed(user_id, channel_id, frame, voiced)
+            playback.human_audio(user_id, frame, voiced)
+
+        receiver.on_frame = observe_frame if self.settings.music_enabled else self.enrollments.feed
+        if self.settings.music_enabled:
+            receiver.on_recognized_speech = playback.recognized_speech
         # Do not restore a stale single-language preference from an older deployment.
         receiver.language = lambda: "auto"
         self.voice_sessions[guild_id] = (conversation, receiver, playback)
@@ -1298,6 +1314,8 @@ class BenteBot(commands.Bot):
         occupied = self.voice_has_humans(guild_id)
         call = self.voice_sessions.get(guild_id)
         if call and occupied is not None:
+            if presence := getattr(call[2], "set_listener_presence", None):
+                presence(occupied)
             if presence := getattr(call[0], "set_listener_presence", None):
                 presence(occupied)
         if occupied is not False:
@@ -1345,6 +1363,8 @@ class BenteBot(commands.Bot):
         session = self.voice_sessions.pop(guild_id, None)
         self._voice_membership_versions.pop(guild_id, None)
         cleanup = [self.model_warmth.release(guild_id), self.tts_warmth.release(guild_id)]
+        if self.music:
+            cleanup.append(self.music.release(guild_id))
         if session:
             conversation, receiver, _ = session
             self.enrollments.cancel(channel_id=conversation.source.channel_id)
@@ -1354,22 +1374,33 @@ class BenteBot(commands.Bot):
                 if isinstance(result, BaseException):
                     log.warning("voice_cleanup guild=%s error=%s", guild_id, type(result).__name__)
         finally:
+            if session:
+                if close := getattr(session[2], "close", None):
+                    close()
             guild = self.get_guild(guild_id)
             if guild and guild.voice_client:
                 await guild.voice_client.disconnect(force=True)
 
     def _replacement_receiver(self, guild_id: int, conversation, previous):
+        def observe_frame(user_id, channel_id, frame, voiced):
+            self.enrollments.feed(user_id, channel_id, frame, voiced)
+            call = self.voice_sessions.get(guild_id)
+            if call:
+                call[2].human_audio(user_id, frame, voiced)
+
         receiver = VoiceReceiver(
             previous.client,
             conversation,
             self.stt,
             previous.notify,
-            self.enrollments.feed,
+            observe_frame if self.settings.music_enabled else self.enrollments.feed,
             lambda: "auto",
         )
         if self.settings.native_viewer_enabled:
             receiver.sink.ignored_user_ids = frozenset({self.settings.native_viewer_id})
         receiver.sink.allowed_user_ids = getattr(getattr(previous, "sink", None), "allowed_user_ids", None)
+        if self.settings.music_enabled and (call := self.voice_sessions.get(guild_id)):
+            receiver.on_recognized_speech = call[2].recognized_speech
         return receiver
 
     async def pause_voice(self, guild_id: int):
@@ -1444,6 +1475,8 @@ class BenteBot(commands.Bot):
             await self.profiles.close()
         await self.model_warmth.close()
         await self.tts_warmth.close()
+        if self.music:
+            await self.music.close()
         await self.chat.close()
         await self.tts.close()
         self.store.close()
@@ -2129,6 +2162,7 @@ def register_commands(bot: BenteBot):
             "`/memory status|search|summarize|forget` - retrieval, summaries and removal\n"
             "`/persona show|add|edit|remove|reset|undo` - persistent personality rules\n"
             "`/tools status|calculate|convert|time|python` - utilities and owner-only analysis\n"
+            "`/music play|pause|resume|stop|next|previous|restart|queue|status|volume|rescan|download|ducking` - owner-only music\n"
             "`/screen start|stop|status` - screen context; native Discord viewing when configured\n"
             "`/settings collection` - channel collection\n`/diagnostics` - configuration and gateway status\n"
             "`/voice clone|clone_status` - current-caller cloning when a compatible provider is configured\n"
@@ -2138,5 +2172,6 @@ def register_commands(bot: BenteBot):
 
     install_tools(bot)
     install_persona(bot)
+    install_music(bot)
     for group in (voice, model, speech, memory, settings, screen):
         bot.tree.add_command(group)

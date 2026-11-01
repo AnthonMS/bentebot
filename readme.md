@@ -5,7 +5,7 @@ screen context and owner-requested Python analysis. It can listen while you
 speak, answer aloud, write code and sources in a linked text channel, and bring
 useful research back while the conversation moves on.
 
-**Version 0.3.3. Development preview.** Core and GPU speech have been used in
+**Version 0.3.7. Development preview.** Core and GPU speech have been used in
 real Discord calls, including a GTX 1080 server. Sound/emotion accuracy,
 multispeaker behavior and provider compatibility need broader testing.
 
@@ -39,6 +39,7 @@ multispeaker behavior and provider compatibility need broader testing.
 | Languages | Automatic English/Danish recognition and optional Danish Piper synthesis. Different speakers are currently used for the two languages. |
 | Sound/tone | Optional CUDA or CPU classification with confidence gates and cooldowns. Experimental; yawning unsupported. |
 | Screen | Paired capture, short-lived frames, relevant followups and spatial crops; on-demand vision inference. |
+| Music | Optional owner-only local playback, single-track MeTube imports, looping artist playlists and genre radio, independent speech/music controls and volume ducking. |
 | Memory | SQLite storage, keyword retrieval, summaries, retention/deletion and source-aware audience checks. |
 
 ## Requirements
@@ -319,6 +320,12 @@ voice. These are different speakers. Ambiguous short text can retain English,
 and helper errors fall back to existing TTS. Consistent bilingual voice identity
 and a complete cloning backend remain planned.
 
+Voice-cloning commands and reference collection are implemented, but cloning is
+disabled by default. The default Kokoro/Piper speech stack does not provide the
+custom-profile creation and deletion API expected by the cloning adapter.
+Enabling `BENTEBOT_VOICE_PROFILES_ENABLED` alone does not add that capability;
+a compatible backend and an end-to-end enrollment/synthesis test are still needed.
+
 ## Optional capabilities
 
 ### Web research
@@ -423,6 +430,111 @@ aliases are excluded, but the bot cannot inspect hidden routing behind arbitrary
 custom names. Never mark an alias local if it can route to cloud. TTS warming
 has separate controls. Normal user requests still consume provider quota.
 
+### Music library and MeTube
+
+Music needs no Spotify account. Local files work without a YouTube account or
+internet lookup. Optional discovery uses public MusicBrainz metadata and yt-dlp
+search, with individual audio downloads through your existing MeTube service.
+See the [MusicBrainz API](https://musicbrainz.org/doc/MusicBrainz_API),
+[yt-dlp documentation](https://github.com/yt-dlp/yt-dlp#usage-and-options) and
+[MeTube](https://github.com/alexta69/metube) for those services.
+Source sites can require authentication or reject requests; the bot reports
+those failures and can continue with usable local recordings. It does not
+bypass account requirements. Use recordings you are authorized to download.
+
+Mount an existing music directory from the Docker host. In core `.env` set:
+
+```dotenv
+BENTEBOT_MUSIC_ENABLED=true
+BENTEBOT_MUSIC_DOWNLOADS_ENABLED=true
+BENTEBOT_MUSIC_LIBRARY_PATH=/music
+BENTEBOT_MUSIC_HOST_PATH=/srv/media/music
+BENTEBOT_MUSIC_METUBE_URL=http://host.docker.internal:8094
+BENTEBOT_MUSIC_VOLUME=0.35
+```
+
+The host directory must already exist and permit container UID 99/GID 100 to
+read files and create artist directories. It must support hard links for atomic
+imports. On Unraid use the local share path such as `/mnt/user/Music`. Mount
+that share locally in Docker; keep the bot database in its existing local volume.
+Existing music is never moved, retagged, transcoded or deleted. To allow only
+existing files, set `BENTEBOT_MUSIC_DOWNLOADS_ENABLED=false`.
+
+```sh
+docker compose --env-file .env -f docker-compose.yml -f deploy/music/compose.yaml up -d --build --no-deps bentebot
+```
+
+Include any private root override before the music overlay if you have one.
+Keep those `-f` arguments on later updates, or put the music bind mount in your
+private root override. Core includes FFmpeg, Mutagen and yt-dlp. Music decoding
+runs on CPU and needs no additional inference model or GPU allocation.
+
+Use `/music play` to join your voice channel automatically, or join with
+`/voice join` first. Choose a song, artist or genre with mode `track`, `artist`
+or `radio`. `auto` recognizes locally known
+artists and common genres, otherwise searches for a song. Spoken examples:
+
+- "Play some Agnes Obel."
+- "Play some RNB music."
+- "Pause the music", "resume the music", "next song", "previous song",
+  "restart this song", "stop the music".
+- "Spil noget jazz", "pause musikken", "fortsæt musikken", "næste nummer".
+
+Only configured bot owners can manage music. Playback controls require the
+bot's current voice channel. Library maintenance works without a call:
+`/music rescan` refreshes the index and `/music download artist:... title:...`
+prepares one specific song without playing it. Artist and song options offer
+local-library suggestions; initial metadata indexing runs in the background.
+`/music status` shows activity and failures, `/music queue` shows
+upcoming tracks, `/music volume` sets 0 to 100 percent, and `/music rescan` picks
+up library changes. Requests replace the current playlist. Artist playlists and
+single songs loop until stopped; radio adds tagged catalog recordings to a
+bounded playlist, then cycles it. Playlists contain at most 50 unique recordings.
+Radio depends on genre tags and catalog coverage, rather than acoustic similarity.
+
+The index reads MP3, FLAC, WAV, Ogg, Opus, M4A, AAC, AIFF and WMA tags where
+available; decoding depends on FFmpeg support. Artist directories and filenames
+provide fallback metadata. Up to 100,000 files are indexed on first use or rescan.
+Two upcoming tracks are prepared while the current one plays. A download delay
+can still produce a gap if preparation has not finished. New tracks are MP3
+192kbps in `Artist/Title [source-id].mp3`. Matching artist/title or source ID
+reuses existing files; incomplete or inconsistent metadata can limit matching.
+Imports never overwrite existing files, have a 40MB bound and require 500MB free.
+Set `DELETE_FILE_ON_TRASHCAN=ask` in MeTube and recreate its container to apply it.
+If your container template only offers `false` and `true`, `true` also works;
+it additionally deletes files whenever completed entries are cleared, including
+automatic history clearing if configured.
+After importing and flushing a library file to disk, Bentebot verifies that its
+compressed audio matches the MeTube source, then explicitly deletes that one
+completed MeTube download and its history entry. The library copy is retained.
+The source ID in the filename supports matching after rescans and restarts.
+Other MeTube downloads and pending jobs are left alone. Failed imports keep the
+source. If source cleanup fails, the bot reports it; repeating `/music download`
+for that artist/title retries cleanup against the verified library copy. MeTube's
+`ask` mode also keeps its automatic history cleanup from deleting files.
+A submitted job may finish in MeTube after music is stopped before import starts.
+
+Music volume falls while the bot speaks. Caller ducking requires recognized
+words plus sustained audible speech, with smoothing to reject brief noise.
+`/music ducking callers:false` disables caller ducking if microphone bleed still
+causes unwanted changes. The bot applies no music noise-cancellation filter.
+Pausing/stopping music
+leaves conversation available; interrupting a spoken answer leaves music playing.
+An empty call freezes music during the existing return window and disconnects
+after one minute. Stopping cancels preparation and retains the last playlist
+for `/music resume`;
+voice requests to restart music can start it again. Only the first track of an
+explicit start is announced; `/music status` provides later track names. Idle
+audio transmission is paused so the bot does not remain marked as speaking.
+Queues belong to the current call and do not survive restart.
+
+Clear spoken music commands use a direct path. Other possible music requests
+are interpreted as a whole sentence by the selected model through LiteLLM,
+then authorized and executed by the application. That bounded interpretation
+can add latency and consumes a normal user-requested model call; it does not
+warm models or run in the background. Failed/uncertain proposals cannot execute
+arbitrary commands or claim that playback changed.
+
 ## Commands and conversation
 
 | Commands | Purpose |
@@ -431,6 +543,7 @@ has separate controls. Normal user requests still consume provider quota.
 | `/model list`, `set` | Effective model and channel/server selection. |
 | `/persona show`, `add`, `edit`, `remove`, `reset`, `undo` | Inherited personality; editing needs owner or Manage Server. |
 | `/tools status`, `calculate`, `convert`, `time`, `python` | Ephemeral utilities; Python owner-only. |
+| `/music play`, `pause`, `resume`, `stop`, `next`, `previous`, `restart`, `status`, `queue`, `volume`, `rescan`, `download`, `ducking` | Owner-only music and library maintenance. |
 | `/memory status`, `search`, `summarize`, `forget` | Permitted stored context and summaries. |
 | `/speech voice`, `voices`, `interruptions` | Speech preferences. |
 | `/speech clone`, `cancel_clone`, `delete_voice` | Reference enrollment; compatible external backend required. |

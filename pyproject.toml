@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bentebot"
-version = "0.3.3"
+version = "0.3.7"
 description = "An API-only Discord text and streaming voice companion"
 requires-python = ">=3.12,<3.13"
 dynamic = ["dependencies"]

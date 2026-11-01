@@ -92,6 +92,11 @@ class Settings:
     max_tts_chars: int = 320
     health_port: int = 8080
     collect_text: bool = True
+    music_enabled: bool = False
+    music_downloads_enabled: bool = False
+    music_library_path: str = "/music"
+    music_metube_url: str = ""
+    music_volume: float = 0.35
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -114,6 +119,23 @@ class Settings:
         return cls(**values)
 
     def validate(self, *, login: bool = True) -> None:
+        if not 0 <= self.music_volume <= 1:
+            raise ValueError("music_volume must be between 0 and 1")
+        if self.music_enabled and not self.music_library_path:
+            raise ValueError("Music needs a library directory")
+        if self.music_metube_url:
+            parsed = urlsplit(self.music_metube_url)
+            if (
+                parsed.scheme not in {"http", "https"}
+                or not parsed.hostname
+                or parsed.username
+                or parsed.password
+                or parsed.query
+                or parsed.fragment
+            ):
+                raise ValueError("music_metube_url must be HTTP(S) without credentials or parameters")
+        if self.music_enabled and self.music_downloads_enabled and not self.music_metube_url:
+            raise ValueError("Music downloads require a MeTube URL")
         if (self.audio_awareness_enabled or self.tts_danish_base_url) and (
             not self.audio_url or len(self.audio_token) < 24
         ):

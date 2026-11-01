@@ -54,10 +54,96 @@ class TrackedPCM(discord.AudioSource):
 
 
 class DiscordPlayback:
-    def __init__(self, client: discord.VoiceClient):
+    def __init__(self, client: discord.VoiceClient, *, mixed=False, music_volume=0.35):
         self.client = client
         self.source: TrackedPCM | None = None
         self.last_finished = float("-inf")
+        from .music_audio import Mixer, SpeechGate
+
+        self.mixer = Mixer(volume=music_volume) if mixed else None
+        self.speech_gate = SpeechGate() if mixed else None
+        self.duck_humans = True
+
+    def _start_mixer(self):
+        if self.mixer and self.mixer.closed:
+            raise ProviderError("Discord music output ended. Rejoin the voice call to recover.")
+        self._sync_mixer()
+
+    def _sync_mixer(self):
+        if not self.mixer or self.mixer.closed:
+            return
+        paused = getattr(self.client, "is_paused", lambda: False)()
+        if self.mixer.has_output():
+            if paused:
+                self.client.resume()
+            elif not self.client.is_playing():
+                self.client.play(
+                    self.mixer, after=lambda error: self.mixer.cleanup(), bitrate=192, signal_type="music"
+                )
+        elif self.client.is_playing():
+            self.client.pause()
+
+    async def play_music(self, path):
+        from .music_audio import BufferedMusic
+
+        if not self.mixer:
+            raise ProviderError("Music playback is disabled for this voice session.")
+        loop = asyncio.get_running_loop()
+        done = loop.create_future()
+
+        def finish(error):
+            def resolve():
+                if not done.done():
+                    done.set_result(None)
+
+            loop.call_soon_threadsafe(resolve)
+
+        building = asyncio.create_task(asyncio.to_thread(BufferedMusic, path))
+        try:
+            source = await asyncio.shield(building)
+        except asyncio.CancelledError:
+            source = await building
+            await asyncio.to_thread(source.cleanup)
+            raise
+        try:
+            self.mixer.set_music(source, finish)
+            self._start_mixer()
+            await done
+            if source.played_frames < 10 or source.failed:
+                raise ProviderError("The recording could not be decoded.")
+        finally:
+            self.mixer.take_music()
+            self._sync_mixer()
+            await asyncio.to_thread(source.cleanup)
+
+    def pause_music(self, paused):
+        if self.mixer:
+            self.mixer.paused = paused
+            self._sync_mixer()
+
+    def set_listener_presence(self, occupied):
+        if self.mixer:
+            self.mixer.occupied = occupied
+            if not occupied:
+                self.speech_gate.users.clear()
+            self._sync_mixer()
+
+    def human_speaking(self):
+        if self.mixer:
+            self.mixer.speaking()
+
+    def human_audio(self, user_id, frame, voiced):
+        if self.duck_humans and self.speech_gate and self.speech_gate.observe(user_id, frame, voiced):
+            self.human_speaking()
+
+    def recognized_speech(self, user_id, final=False):
+        if self.duck_humans and self.speech_gate and self.speech_gate.confirm(user_id, final=final):
+            self.human_speaking()
+
+    def close(self):
+        if self.mixer:
+            self.mixer.cleanup()
+        self.client.stop_playing()
 
     async def play(self, pcm: bytes, text: str, progress) -> None:
         if not pcm:
@@ -78,20 +164,31 @@ class DiscordPlayback:
             loop.call_soon_threadsafe(set_result)
 
         try:
-            self.client.play(source, after=finish)
+            if self.mixer:
+                self.mixer.set_speech(source, finish)
+                self._start_mixer()
+            else:
+                self.client.play(source, after=finish)
             await done
         finally:
             self.last_finished = time.monotonic()
             source.gate.clear()
             if self.source is source:
                 self.source = None
-            if self.client.is_playing():
+            if self.mixer:
+                self.mixer.stop_speech()
+                self._sync_mixer()
+            elif self.client.is_playing():
                 self.client.stop_playing()
 
     def stop(self) -> None:
         if self.source:
             self.source.gate.clear()
-        self.client.stop_playing()  # Receive must continue while output is cancelled.
+        if self.mixer:
+            self.mixer.stop_speech()
+            self._sync_mixer()
+        else:
+            self.client.stop_playing()  # Receive must continue while output is cancelled.
 
 
 class ReceiveSink(voice_recv.AudioSink):
@@ -156,6 +253,7 @@ class VoiceReceiver:
         self._last_notice = 0.0
         self.on_frame = on_frame
         self.language = language
+        self.on_recognized_speech = None
 
     def _observe(self, user_id: int, frame: bytes, voiced: bool):
         if audio := getattr(self.conversation, "audio", None):
@@ -240,6 +338,8 @@ class VoiceReceiver:
             if self.closed or not speaker.active:
                 return
             self.last_error = ""
+            if update.text.strip() and self.on_recognized_speech:
+                self.on_recognized_speech(user_id=speaker.user_id, final=update.final)
             try:
                 await self.conversation.transcript(speaker.user_id, speaker.name, update)
             except asyncio.CancelledError:

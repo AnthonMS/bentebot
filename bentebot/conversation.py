@@ -14,6 +14,7 @@ from .audio_awareness import AudioAwareness
 from .config import Settings
 from .domain import Audience, Event, Metrics, ResponseRecord, Source, Transcript
 from .memory import Memory
+from .music_intent import music_candidate, music_intent
 from .providers import CHAT_OBSERVATION, OpenAIChat, OpenAITTS, ProviderError
 from .research import ResearchJob, ResearchJobs, integrate_research
 from .speech import speak_response
@@ -323,8 +324,13 @@ class VoiceConversation:
         self.partial[user_id] = text
         self.partial_updated_at[user_id] = now
         words = re.findall(r"\b[\w’']+\b", text.casefold())
+        music_control = bool(
+            self.settings.music_enabled
+            and (music_intent(text) or update.final and music_candidate(text, context=True))
+        )
         explicit_control = (
-            spoken_control(text, output_held=self.output_held) is not None
+            music_control
+            or spoken_control(text, output_held=self.output_held) is not None
             or control_candidate(text, output_held=self.output_held)
             or (update.final and semantic_control_candidate(text, output_held=self.output_held))
         )
@@ -393,8 +399,10 @@ class VoiceConversation:
                 # A later final from this speaker supersedes their own command,
                 # while another caller's speech must not overwrite it.
                 self.pending_controls.pop(user_id, None)
-                if spoken_control(text, output_held=self.output_held) or semantic_control_candidate(
-                    text, output_held=self.output_held
+                if (
+                    music_control
+                    or spoken_control(text, output_held=self.output_held)
+                    or semantic_control_candidate(text, output_held=self.output_held)
                 ):
                     self.pending_controls[user_id] = text
                     if len(self.pending_controls) > 32:
@@ -830,6 +838,13 @@ class VoiceConversation:
                 extra_sources = tuple(dict.fromkeys(s for j in returning for s in j.extra_sources))
             if self.audio:
                 messages.extend(self.audio.context(audience, self.speaker_names))
+            if self.settings.music_enabled:
+                messages.append(
+                    {
+                        "role": "system",
+                        "content": "The Discord application has working music playback and /music commands. Owners can play artists/songs/radio and pause/resume/stop/skip/restart. Music requests are interpreted and executed by the application before ordinary chat. Do not claim music control is unavailable or direct owners to Spotify/YouTube instead. Your prose cannot execute music actions: for a music-control request that was not accepted, clarify the music request or suggest /music, without claiming playback changed.",
+                    }
+                )
             if audio_reaction:
                 sources = tuple(dict.fromkeys((*sources, self.source)))
                 messages.append(

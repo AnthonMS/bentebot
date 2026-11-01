@@ -9,3 +9,5 @@ webrtcvad-wheels==2.0.14.post1
 Pillow==13.0.0
 
 tzdata==2026.6
+mutagen==1.48.1
+yt-dlp==2026.10.26

@@ -18,6 +18,7 @@ from websockets.exceptions import ConnectionClosed, ConnectionClosedOK, InvalidS
 from .config import Settings
 from .domain import ResponseRecord, Transcript
 from .model_aliases import GPT_COMPAT_ALIASES, canonical_model
+from .music_intent import MUSIC_INTENT_RULES
 from .native_web import SEARCH_RULES, NativeWebError, native_round
 from .tools import (
     TOOL_RULES,
@@ -771,6 +772,74 @@ class OpenAIChat:
             return urlsplit(response.headers.get("x-litellm-model-api-base", "")).hostname or "unreported"
         except (httpx.HTTPError, ValueError, TypeError) as exc:
             raise ProviderError("Model prewarming failed; check the local chat gateway.") from exc
+
+    async def resolve_music_control(self, text: str, model: str, state: dict) -> tuple | None:
+        if not text or len(text) > 400:
+            return None
+        body = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": MUSIC_INTENT_RULES},
+                {
+                    "role": "user",
+                    "content": json.dumps({"request": text, "playback": state}, ensure_ascii=False),
+                },
+            ],
+            "stream": False,
+            "max_tokens": 180,
+            "temperature": 0,
+        }
+        aliases = {m.strip() for m in self.settings.chat_reasoning_models.split(",") if m.strip()} or {
+            self.settings.chat_model
+        }
+        if self.settings.chat_reasoning_effort and model in aliases:
+            body["reasoning_effort"] = self.settings.chat_reasoning_effort
+        if model in {m.strip() for m in self.settings.chat_template_no_thinking_models.split(",")}:
+            body["chat_template_kwargs"] = {"enable_thinking": False}
+        try:
+            async with asyncio.timeout(15):
+                response = await self.client.post(
+                    f"{self.settings.chat_base_url.rstrip('/')}/chat/completions",
+                    headers=self.headers,
+                    json=body,
+                    timeout=15,
+                )
+                response.raise_for_status()
+                payload = response.json()
+                choice = payload["choices"][0]
+                if payload.get("error") or choice.get("finish_reason", "stop") != "stop":
+                    return None
+                content = choice["message"]["content"]
+                if not isinstance(content, str) or len(content) > 1200:
+                    return None
+                fenced = re.fullmatch(r"\s*```(?:json)?\s*\n(.*?)\n```\s*", content, re.S)
+                if fenced:
+                    content = fenced[1]
+                plan = json.loads(content)
+                if not isinstance(plan, dict) or set(plan) != {"action", "query", "mode"}:
+                    return None
+                action, query, mode = plan["action"], plan["query"], plan["mode"]
+                if not all(isinstance(v, str) for v in (action, query, mode)):
+                    return None
+                if action == "play":
+                    if (
+                        1 <= len(query.strip()) <= 180
+                        and not any(c in query for c in "\n\r\x00")
+                        and mode in {"auto", "artist", "track", "radio"}
+                    ):
+                        return action, query.strip(), mode
+                elif (
+                    action
+                    in {"none", "pause", "resume", "stop", "next", "previous", "restart", "restart_music"}
+                    and not query
+                    and not mode
+                ):
+                    return action, "", ""
+                return None
+        except asyncio.CancelledError:
+            raise
+        except (TimeoutError, httpx.HTTPError, ValueError, KeyError, IndexError, TypeError, AttributeError):
+            return None
 
     async def resolve_spoken_control(self, text: str, model: str, *, output_held: bool = False) -> str | None:
         """One bounded classification request, never executable prose or conversation history."""

@@ -1,0 +1,9 @@
+# Merge with the root docker-compose.yml. The source must be local to Docker.
+services:
+  bentebot:
+    volumes:
+      - type: bind
+        source: ${BENTEBOT_MUSIC_HOST_PATH:?Set BENTEBOT_MUSIC_HOST_PATH to your existing local music directory}
+        target: /music
+        bind:
+          create_host_path: false

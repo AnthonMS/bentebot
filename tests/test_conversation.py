@@ -1,4 +1,5 @@
 import asyncio
+from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -12,6 +13,23 @@ from bentebot.permissions import AccessPolicy
 from bentebot.providers import ProviderError
 
 SOURCE = Source("channel", 10, 1)
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+async def test_music_can_be_controlled_while_spoken_answer_is_held(store, enabled):
+    control = AsyncMock(return_value=True)
+    session = make_session(store, control=control)
+    session.settings = replace(session.settings, music_enabled=enabled)
+    session.output_held = True
+    try:
+        await session.transcript(100, "Me", Transcript("play some Agnes Obel", final=True))
+        assert bool(session.pending_controls) == enabled
+        if enabled:
+            await session._dispatch_control(100, session.pending_controls.pop(100))
+            control.assert_awaited_once_with(100, "play some Agnes Obel")
+            assert session.output_held
+    finally:
+        await session.close()
 
 
 async def yes(*args):

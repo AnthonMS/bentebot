@@ -40,6 +40,11 @@ async def offline_check():
             "persona edit",
             "tools python",
             "tools calculate",
+            "music play",
+            "music stop",
+            "music rescan",
+            "music download",
+            "music ducking",
         }
         if not required.issubset(names):
             raise RuntimeError("Required commands were not registered")

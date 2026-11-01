@@ -88,6 +88,13 @@ docker-compose.override.yaml
 *.safetensors
 *.wav
 *.mp3
+*.flac
+*.ogg
+*.opus
+*.m4a
+*.aac
+*.aiff
+*.wma
 *.mp4
 *.csv
 *.zip
